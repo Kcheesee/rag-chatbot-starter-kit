@@ -14,8 +14,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@aws-sdk/client-comprehend": "^3.717.0",
+    "@notionhq/client": "^2.2.16",
     "@rag-chat-agent/audit-logger": "*",
     "@rag-chat-agent/llm-adapters": "*",
-    "@rag-chat-agent/vector-adapters": "*"
+    "@rag-chat-agent/rag-core": "*",
+    "@rag-chat-agent/vector-adapters": "*",
+    "cheerio": "^1.0.0",
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.4"
   }
 }
