@@ -1,3 +1,16 @@
-// Package entry point. Re-exports the package's public surface.
-// Phase 1 placeholder — interfaces land in Phase 2, implementations thereafter.
-export const PACKAGE_VERSION = "0.1.0";
+/**
+ * @rag-chat-agent/audit-logger — public surface.
+ *
+ * Phase 2 exports the typed event contracts. The singleton emitter, target
+ * backends (console/CloudWatch/S3/Splunk), and no-op test logger land in Phase 3.
+ */
+export type {
+  DeploymentMode,
+  BaseAuditEvent,
+  QueryEvent,
+  IngestEvent,
+  CacheEvent,
+  SecurityEvent,
+  AuditLogger,
+  AuditLogTarget,
+} from "./types";

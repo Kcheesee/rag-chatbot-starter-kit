@@ -1,3 +1,14 @@
-// Package entry point. Re-exports the package's public surface.
-// Phase 1 placeholder — interfaces land in Phase 2, implementations thereafter.
-export const PACKAGE_VERSION = "0.1.0";
+/**
+ * @rag-chat-agent/llm-adapters — public surface.
+ *
+ * Phase 2 exports the typed contracts. The provider implementations and the
+ * `createLLMAdapter(env)` / `createEmbeddingAdapter(env)` factories land in Phase 4.
+ */
+export type {
+  ChatMessage,
+  ChatOptions,
+  ChatResponse,
+  TokenUsage,
+  LLMAdapter,
+  EmbeddingAdapter,
+} from "./types";

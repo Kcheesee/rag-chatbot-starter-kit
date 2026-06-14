@@ -1,3 +1,14 @@
-// Package entry point. Re-exports the package's public surface.
-// Phase 1 placeholder — interfaces land in Phase 2, implementations thereafter.
-export const PACKAGE_VERSION = "0.1.0";
+/**
+ * @rag-chat-agent/vector-adapters — public surface.
+ *
+ * Phase 2 exports the typed contracts. The Chroma/Pinecone/pgvector/Weaviate
+ * implementations and the `createVectorAdapter(env)` factory land in Phase 5.
+ */
+export type {
+  ChunkMetadata,
+  EmbeddedChunk,
+  StoredChunk,
+  SearchResult,
+  MetadataFilter,
+  VectorAdapter,
+} from "./types";
