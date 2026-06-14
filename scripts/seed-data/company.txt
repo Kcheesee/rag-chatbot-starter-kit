@@ -1,0 +1,11 @@
+Acme Corporation — Company Overview
+
+Acme Corporation was founded in 2010 and provides widgets and gadgets to customers
+worldwide. The company is headquartered in Columbus, Ohio, and operates fulfillment
+centers in Ohio, Nevada, and the Netherlands.
+
+Acme's mission is to make high-quality everyday hardware affordable and reliable.
+The company employs roughly 400 people across engineering, operations, and support.
+
+Business hours for customer support are Monday through Friday, 9am to 6pm Eastern
+Time. Acme observes all US federal holidays.

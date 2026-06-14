@@ -18,7 +18,8 @@ import { sha256Hex } from "./hash";
 
 /** Collaborators the pipeline needs. Pass null/undefined to skip optional ones. */
 export interface IngestDeps {
-  embedder: EmbeddingAdapter;
+  /** Required for a real ingest; may be omitted for a `dryRun` (no embedding). */
+  embedder?: EmbeddingAdapter;
   vectorStore: VectorAdapter;
   /** Invalidated for the namespace after a successful re-ingest. */
   cache?: ResponseCache | null;
@@ -80,11 +81,15 @@ export async function ingest(
   const tokensProcessed = allChunks.reduce((sum, chunk) => sum + estimateTokens(chunk.text), 0);
 
   if (!options.dryRun && allChunks.length > 0) {
+    if (!deps.embedder) {
+      throw new Error("An embedder is required to ingest. Only a dry run may omit it.");
+    }
+    const embedder = deps.embedder;
     const store = deps.vectorStore.namespace(namespace);
     const batchSize = deps.embedBatchSize ?? DEFAULT_BATCH;
     for (let i = 0; i < allChunks.length; i += batchSize) {
       const batch = allChunks.slice(i, i + batchSize);
-      const vectors = await deps.embedder.embed(batch.map((c) => c.text));
+      const vectors = await embedder.embed(batch.map((c) => c.text));
       // Fail loudly on a provider/batch misalignment rather than silently storing an
       // empty embedding, which would corrupt retrieval for the affected chunks.
       if (vectors.length !== batch.length) {
