@@ -14,8 +14,6 @@
     },
     "lint": {},
     "typecheck": {},
-    "test": {
-      "outputs": ["coverage/**"]
-    }
+    "test": {}
   }
 }

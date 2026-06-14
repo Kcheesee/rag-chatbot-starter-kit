@@ -1,8 +1,9 @@
 /**
  * @rag-chat-agent/audit-logger — public surface.
  *
- * Phase 2 exports the typed event contracts. The singleton emitter, target
- * backends (console/CloudWatch/S3/Splunk), and no-op test logger land in Phase 3.
+ * NIST 800-53-format structured audit logging. Build once from validated env via
+ * `initAuditLogger`, then `getAuditLogger()` anywhere. Records carry metadata and
+ * scores only — never raw query or response text.
  */
 export type {
   DeploymentMode,
@@ -14,3 +15,25 @@ export type {
   AuditLogger,
   AuditLogTarget,
 } from "./types";
+
+export type {
+  AuditLoggerConfig,
+  CloudWatchConfig,
+  S3Config,
+  SplunkConfig,
+} from "./config";
+export { DEFAULT_AUDIT_CONFIG } from "./config";
+
+export type { AuditTarget, AuditRecord } from "./targets";
+
+export {
+  type FlushableAuditLogger,
+  StructuredAuditLogger,
+  NoOpAuditLogger,
+  createAuditLogger,
+  initAuditLogger,
+  getAuditLogger,
+  resetAuditLogger,
+} from "./logger";
+
+export { hashText } from "./hash";
