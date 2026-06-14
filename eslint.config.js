@@ -13,6 +13,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/.turbo/**",
       "**/next-env.d.ts",
+      // Generated, minified embeddable widget bundle (built into the web public dir).
+      "**/public/widget.js",
     ],
   },
   js.configs.recommended,

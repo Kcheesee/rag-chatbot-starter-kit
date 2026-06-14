@@ -20,7 +20,7 @@ Supports:
 | Persona | Use case |
 |---|---|
 | Digital agency | Stand up a branded chat agent for a client in days, not weeks |
-| Federal agency / GovTech contractor | Deploy a FedRAMP-compliant, Section 508-accessible knowledge bot inside the GovCloud boundary |
+| Federal agency / GovTech contractor | Start from a federal-oriented template — GovCloud routing, Section 508-oriented UI, NIST-format audit logging — inside the authorization boundary. Still requires your own ATO and 3PAO assessment. |
 | Internal IT team | Deploy a knowledge base bot to Slack/Teams for employees |
 | SaaS product team | Embed a support assistant directly in your app or marketing site |
 | Solo developer | Learn how production RAG works without reading 12 different repos |
@@ -80,7 +80,7 @@ This repo is a head start, not a finished product. It gives you the wiring, the 
 | LLM | Anthropic direct API | Bedrock / Vertex / Azure OpenAI | Bedrock GovCloud / Azure Gov / 1P internal |
 | Embeddings | OpenAI text-embedding-3-small | Bedrock or Vertex embeddings | Same via GovCloud boundary |
 | Vector store | Chroma (local) | pgvector or Weaviate | pgvector on Aurora GovCloud |
-| Auth | Clerk (optional) | NextAuth or org SSO | SAML 2.0 + PIV / CAC |
+| Auth | Pluggable, secure-by-default gate (Clerk optional) | NextAuth or org SSO | SAML 2.0 + PIV / CAC |
 | Secrets | `.env.local` file | AWS Secrets Manager / Azure Key Vault | IAM role — no stored secrets |
 | Deployment | Vercel + Railway | ECS / Azure App Service / GKE | AWS GovCloud ECS / Azure Gov |
 | Session store | In-memory | Redis (Upstash or self-hosted) | ElastiCache GovCloud |
@@ -360,7 +360,7 @@ ALLOWED_REGIONS=us-east-1,us-west-2
 
 - Node.js 20+
 - Docker (for local Chroma + Redis)
-- An API key for Anthropic or OpenAI
+- **Two keys for the default path: an LLM key _and_ an embedding key.** The default config is Anthropic (LLM) + OpenAI (embeddings), so you need **both** `ANTHROPIC_API_KEY` **and** `OPENAI_API_KEY` — not either one. Anthropic has no first-party embeddings API, so the embedding key is separate. To avoid OpenAI entirely, set `EMBEDDING_PROVIDER=voyage` (or `cohere`) and supply that provider's key instead.
 
 ### 1. Clone and install
 
@@ -376,6 +376,8 @@ npm install
 cp .env.example .env.local
 # Fill in your API keys and preferred providers
 ```
+
+Put your keys in a **repo-root `.env.local`** (not inside `apps/web/`). The root `.env.local` (then `.env`) is now loaded for **both** the web app and the CLIs (`npm run ingest` / `npm run seed`) from a single seam, so the same file works everywhere. Real shell / secrets-manager values still take precedence over the file. For the default path you need both an LLM key and an embedding key — see [Prerequisites](#prerequisites).
 
 ### 3. Start local services
 
@@ -414,10 +416,10 @@ npm run dev --workspace=apps/widget
 ### Web app
 
 The `apps/web` package is a full Next.js App Router project with:
-- Streaming chat UI using Vercel AI SDK
+- Streaming chat UI — the app streams **ndjson over a hand-rolled `ReadableStream`** (no Vercel AI SDK); the client decodes it line by line
 - Conversation history
 - Source citations on each answer
-- Optional auth via Clerk
+- Optional auth — a pluggable, secure-by-default gate (Clerk / NextAuth / SAML are integration options, not the default; see [`CONFIG.md#auth`](CONFIG.md#auth))
 
 Deploy to Vercel in one command:
 ```bash
@@ -444,16 +446,21 @@ The `apps/widget` package builds a self-contained `<script>` tag you drop into a
 ```html
 <script
   src="https://your-api.com/widget.js"
-  data-bot-id="your-bot-id"
+  data-api-url="https://your-api.com"
+  data-bot-name="Aria"
   data-primary-color="#0066FF"
   data-position="bottom-right"
+  data-mode="bubble"
 ></script>
 ```
 
-Customisable:
-- Brand color, logo, and bot name via `data-*` attributes
-- Floating bubble or inline embed mode
-- Iframe-sandboxed for safety on any host site
+Customisable via `data-*` attributes (see `apps/widget/src/loader.ts`):
+- `data-api-url` — API origin (defaults to the script's own origin)
+- `data-bot-name` — bot display name (defaults to `Assistant`)
+- `data-primary-color` — launcher / accent color (defaults to `#1d4ed8`)
+- `data-position` — `bottom-right` (default) or `bottom-left`
+- `data-mode` — `bubble` (floating launcher, default) or `inline` (renders in place)
+- Iframe-sandboxed for safety on any host site; which host pages may embed it is enforced server-side via a CSP `frame-ancestors` header keyed off `WIDGET_ALLOWED_ORIGINS`
 
 ---
 
@@ -503,9 +510,9 @@ Chunking strategy: recursive text splitting with semantic boundary awareness. Ch
 
 Following current enterprise deployment patterns:
 
-- **Authentication** — optional Clerk integration for user auth. All API routes can be protected behind auth middleware.
+- **Authentication** — a pluggable, **secure-by-default** gate. With `AUTH_ENABLED=true` and no verifier configured, the API **fails closed** (rejects every request). Wire a real verifier with `setTokenVerifier(...)` (Clerk / NextAuth / JWKS / SAML), use the built-in `AUTH_STATIC_TOKENS`, or — local dev only — `AUTH_ALLOW_INSECURE_TOKENS`. See [`CONFIG.md#auth`](CONFIG.md#auth).
 - **Rate limiting** — per-user or per-IP rate limiting on the `/api/chat` endpoint. Configurable via `AUTH_RATE_LIMIT`.
-- **Role-based access** (optional) — multi-tenant mode lets you scope vector store namespaces per user role or organisation. A user only retrieves chunks from namespaces they are authorised for.
+- **Tenant → namespace isolation** — a verified identity carries which namespaces it may use; a caller can never read another tenant's data by passing an arbitrary namespace. `/api/ingest` additionally requires an **admin** identity.
 - **API key management** — all secrets via environment variables only. Never committed to the repo.
 - **CORS** — widget server enforces an allowlist of host domains via `WIDGET_ALLOWED_ORIGINS`.
 - **Prompt injection hardening** — system prompt is server-controlled and not user-modifiable. User input is sanitised before concatenation.
@@ -548,7 +555,7 @@ Then register it in `packages/ingestion/src/index.ts`.
 
 ### Styling the web app
 
-The web app uses Tailwind + shadcn/ui. Override the theme in `apps/web/tailwind.config.ts`. The chat UI components in `packages/ui-components` accept a `theme` prop.
+The UI components use **inline styles + CSS custom properties** — there is no Tailwind or shadcn/ui, and no `tailwind.config.ts`. Restyle by passing a `theme` prop to the chat UI components in `packages/ui-components`, which sets the CSS custom properties the components read.
 
 ---
 
@@ -571,7 +578,7 @@ Based on how teams are shipping production RAG agents in 2025–2026, these are 
 
 > Everything in this section lives in the `/federal` directory. It is opt-in. Commercial deployments are not affected.
 
-Federal agencies and GovTech contractors operating under FedRAMP requirements cannot use the standard commercial configuration out of the box. The infrastructure, LLM access paths, vector store, auth, logging, and UI all need to change. This section documents what changes and why.
+This is a **federal-oriented template / starting point — not a FedRAMP-authorized or "compliant" product**. It re-routes dependencies inside the authorization boundary and ships the controls and compliance-document templates a federal system needs, but it **still requires your own ATO and an independent 3PAO (or agency-designated) assessment**. Federal agencies and GovTech contractors operating under FedRAMP requirements cannot use the standard commercial configuration out of the box: the infrastructure, LLM access paths, vector store, auth, logging, and UI all need to change. This section documents what changes and why.
 
 ### What changes
 

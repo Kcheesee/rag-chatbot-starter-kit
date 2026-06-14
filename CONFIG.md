@@ -88,6 +88,8 @@ Notes:
 
 > Changing the embedding model is disruptive: new vectors are incompatible with old ones, so the **entire vector store must be re-embedded**. Schedule it as a maintenance window.
 
+> **Asymmetric doc/query mode is handled automatically.** Providers that distinguish how a document vs. a search query is embedded are driven in the correct mode for you — documents at ingest time, queries at retrieval time — so a query and the document that should answer it are pushed closer together. The mode mapping: **Cohere** `search_query` / `search_document`, **Voyage** `query` / `document`, **Vertex** `RETRIEVAL_QUERY` / `RETRIEVAL_DOCUMENT` (Cohere-on-Bedrock uses the Cohere pair). **OpenAI** and **Amazon Titan** are **symmetric** — they ignore the distinction, and no configuration is needed either way.
+
 ---
 
 ## Vector store
@@ -178,6 +180,27 @@ npm run seed
 
 `--namespace` lets you re-ingest an individual document set without rebuilding the whole knowledge base.
 
+### Source security (SSRF / file reads)
+
+The ingestion loaders fetch operator-supplied URLs and read operator-supplied paths. On the hosted admin route (`/api/ingest`) those inputs are effectively attacker-influenced, so the url/sitemap/file loaders run behind a deny-by-default security policy (`packages/ingestion/src/loaders/security.ts`). Defaults are safe out of the box; the variables below tighten them further.
+
+| Var | Default | Notes |
+|---|---|---|
+| `INGEST_ROOT` | — | When set, every file path is confined to this directory after `..`/symlink resolution (a trailing-separator prefix check, so `/data/ingest-evil` can't pose as a child of `/data/ingest`). Unset → local paths are trusted unchanged (the CLI legitimately reads anywhere). |
+| `INGEST_URL_ALLOWLIST` | — | Comma-separated host allowlist for the url/sitemap loaders. An entry is an exact host (`example.com`) or a leading-dot suffix (`.example.com`, which matches `a.example.com` **and** bare `example.com`). Unset → any *public* host is allowed (still subject to the private-IP block). An empty list allows nothing. |
+| `INGEST_MAX_BYTES` | `10000000` | Hard cap (10 MB) on a fetched body, enforced by streaming and aborting early — protects against decompression-bomb / unbounded-response memory exhaustion even when `Content-Length` lies or is absent. |
+| `INGEST_TIMEOUT_MS` | `15000` | Per-fetch timeout via `AbortController`; stops a slow-loris endpoint from hanging the crawl. |
+| `INGEST_ALLOW_PRIVATE_NETWORKS` | `false` | **DANGER.** `true` skips the private-IP gate entirely. Only for the trusted local CLI crawling an intranet — never for the hosted/admin surface, where it re-opens the SSRF hole. |
+
+What the policy enforces:
+
+- **Scheme gate** — only `http`/`https`. `file:`, `ftp:`, `gopher:`, `data:`, etc. are refused.
+- **Private/loopback/link-local/metadata blocking (IPv4 + IPv6)** — fetches to `127.0.0.0/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16` (which includes the `169.254.169.254` cloud-metadata IP), `100.64/10` CGNAT, `0.0.0.0/8`, and the IPv6 equivalents (`::1`, `::`, `fc00::/7` unique-local, `fe80::/10` link-local, and IPv4-mapped `::ffff:a.b.c.d`) are rejected. A public hostname that **resolves** to one of these is also rejected (the gate is applied to every resolved address).
+- **Per-request size and timeout caps** — `INGEST_MAX_BYTES` and `INGEST_TIMEOUT_MS` above.
+- **Redirect re-validation** — redirects are followed manually with `redirect: "manual"` and **every hop is re-validated** against the same gate, so an allowlisted URL cannot `302` you to `http://169.254.169.254/…`.
+
+> **Documented residual limitations.** Two classes of attack are **not** fully covered: (1) **DNS-rebinding TOCTOU** — the host is resolved and checked at validation time, but a hostile resolver could return a different address at connection time; and (2) **exotic host encodings** — unusual IPv6 forms and octal-or-integer-encoded IPv4 hosts may slip past the literal classifier. For hostile environments, **pin IPs at the connection layer** (resolve once, dial the vetted address) rather than relying on this gate alone.
+
 ---
 
 ## PII redaction
@@ -194,16 +217,41 @@ Federal deployments enable redaction with `aws-comprehend` inside the GovCloud b
 
 ## Auth
 
+The auth gate is **secure by default**. When `AUTH_ENABLED=true` and **no token verifier is configured**, the API **fails closed** — every request is rejected with `503`. There is no "any non-empty bearer token is a valid user" fallback; you opt back into that explicitly, for dev only.
+
+You make the gate functional one of three ways:
+
+1. **Register a real verifier** with `setTokenVerifier(verifier)` — a Clerk / NextAuth session check, a JWKS validator, or a SAML assertion check. A verifier maps a bearer token to a `VerifiedIdentity` (`userId`, optional `isAdmin`, optional `namespaceAccess`) or returns `null` to reject. It's async, so JWKS/IdP round-trips fit. Register it once at startup — typically in `apps/web/instrumentation.ts`.
+2. **Use the built-in static-token verifier** via `AUTH_STATIC_TOKENS` — a JSON array of identities, good for simple and test deployments without extra code.
+3. **Opt into insecure tokens** with `AUTH_ALLOW_INSECURE_TOKENS=true` — **local dev only.**
+
+Resolution order on a request: `AUTH_ENABLED=false` → open (treated as a local admin, `"any"` namespace, so `npm run dev` can ingest); else no bearer token → `401`; else a registered verifier decides; else `AUTH_STATIC_TOKENS`; else `AUTH_ALLOW_INSECURE_TOKENS`; else **fail closed (`503`)**.
+
 | Var | Default | Values / notes |
 |---|---|---|
-| `AUTH_ENABLED` | `false` | Gate the API routes behind auth middleware. |
-| `AUTH_PROVIDER` | `clerk` | `clerk` \| `nextauth` \| `saml` (saml for enterprise/federal SSO) |
-| `CLERK_SECRET_KEY` | — | Required when `AUTH_PROVIDER=clerk` |
+| `AUTH_ENABLED` | `false` | Gate the API routes behind auth. `false` = open (dev / public widget). |
+| `AUTH_STATIC_TOKENS` | — | JSON array of identities for the built-in verifier: `[{"token":"...","userId":"ops","admin":true,"namespaces":["acme"]}]`. `userId` defaults to the token; `admin` defaults to `false`; `namespaces` pins tenant access (omit → `AUTH_DEFAULT_NAMESPACE`). Malformed JSON fails loudly rather than silently disabling auth. |
+| `AUTH_ALLOW_INSECURE_TOKENS` | `false` | **DEV ONLY.** Treat any non-empty bearer token as an opaque user id with **no tenant scope**. Forbidden under `DEPLOYMENT_MODE=federal` (rejected at boot). |
+| `AUTH_DEFAULT_NAMESPACE` | `default` | Namespace granted to a verified identity that doesn't pin its own `namespaces`. |
+| `AUTH_PROVIDER` | `clerk` | `clerk` \| `nextauth` \| `saml` — a hint for which integration you're wiring; the verifier you register is what actually enforces auth. |
+| `CLERK_SECRET_KEY` | — | Used by a Clerk verifier when `AUTH_PROVIDER=clerk` |
 | `SAML_ENTRY_POINT` | — | IdP SSO URL when `AUTH_PROVIDER=saml` |
 | `SAML_ISSUER` | `rag-chat-agent` | SAML issuer / entity id |
 | `AUTH_RATE_LIMIT` | `50` | Requests/min per user or IP on `/api/chat` |
 
-> The auth gate ships as a **placeholder** — it provides the middleware seam and rate limiting, but you must wire it to your actual identity provider before relying on it in production.
+### Tenant → namespace binding
+
+A verified identity carries which namespace(s) it may touch. Routes call `authorizeNamespace(auth, requested)`, so **a caller may only use namespaces its identity permits** — passing an arbitrary `namespace` in the request body cannot reach another tenant's data. `namespaceAccess: "any"` lifts the restriction (single-tenant / trusted deployments); an explicit list pins multi-tenant isolation. Note that **admin status does not widen namespace access** — grant `"any"` or list namespaces explicitly.
+
+### Admin-gated ingestion
+
+Ingestion is privileged: `/api/ingest` requires an **admin** identity (`requireAdmin`). In a static-token entry, set `"admin": true`. Anyone who can ingest can change what the bot tells every user — treat ingest access like write access to a production database.
+
+### How the browser sends its token
+
+When `AUTH_ENABLED=true`, the browser sends its token as `Authorization: Bearer <token>`. By default `useChat` reads that token from `sessionStorage["rag_auth_token"]` (the documented seam a host page populates after its own login). Override it by passing a `getAuthToken` callback to `useChat` — e.g. to source the token from your auth provider's client SDK (Clerk's `getToken`). Returning `null`/`undefined` sends no header (correct for the default `AUTH_ENABLED=false` demo).
+
+> **Browser-exposed tokens must be short-lived and scoped.** A token readable by client JavaScript can leak; mint per-session, least-privilege, expiring tokens — never a long-lived admin token in the browser.
 
 ---
 
@@ -244,13 +292,22 @@ Target-specific variables:
 
 ## Accuracy guardrails
 
+The guardrails **fail closed**: an answer the pipeline cannot vouch for is **escalated** for human handoff rather than served as authoritative.
+
 | Var | Default | Notes |
 |---|---|---|
 | `MIN_RETRIEVAL_CONFIDENCE` | `0.70` | Below this top-chunk similarity, the query hits the low-confidence fallback. |
+| `STRICT_GROUNDING` | `false` | `true` = an answer with **zero valid citations** is escalated rather than served as authoritative. Recommended for regulated/high-stakes deployments where an ungrounded answer is worse than no answer. |
 | `FAITHFULNESS_CHECK` | `false` | `true` for high-stakes / regulated deployments — verifies the answer is grounded in retrieved context. |
 | `FAITHFULNESS_THRESHOLD` | `0.85` | Min faithfulness score when the check is on. |
 | `MAX_CONTEXT_TOKENS` | — | Caps the size of the assembled context window. |
 | `QUERY_REWRITE` | — | Enables the optional LLM query-rewrite step (improves retrieval on vague queries). |
+
+### Escalation behaviour
+
+When the pipeline escalates, the response carries `escalate: true` and a machine-readable `escalateReason` the surface can act on (badge, route to a human, or suppress) — e.g. `low_retrieval_confidence`, `no_grounded_citations`, `faithfulness_below_threshold`, `faithfulness_unparseable`.
+
+> **An unparseable faithfulness score now escalates.** Previously a score the judge model returned in an unreadable form was treated as "fully faithful" (fail-open); it is now treated as "could not confirm" and escalates (`escalateReason: "faithfulness_unparseable"`). A score below `FAITHFULNESS_THRESHOLD` escalates as `faithfulness_below_threshold`.
 
 ---
 
@@ -279,6 +336,11 @@ The env schema **rejects boot** unless all of the following hold when `DEPLOYMEN
 - `VECTOR_STORE` **!=** `pinecone` (no FedRAMP authorization).
 - `PGVECTOR_SSL=require`.
 - `AUTH_ENABLED=true`.
+- `AUTH_ALLOW_INSECURE_TOKENS` **!=** `true` — federal mode forbids the dev-only insecure-token fallback; wire a real verifier (see [Auth](#auth)).
+
+### Data residency
+
+`ENFORCE_DATA_RESIDENCY=true` validates `AWS_REGION` **and** `VERTEX_LOCATION` against `ALLOWED_REGIONS` **at startup** — an out-of-boundary region fails fast at boot rather than silently shipping data across a jurisdiction. This applies in **standard mode too** (residency isn't federal-only).
 
 ### Federal-specific options
 
@@ -287,10 +349,12 @@ The env schema **rejects boot** unless all of the following hold when `DEPLOYMEN
 | `DEPLOYMENT_MODE` | `standard` | `standard` \| `federal` |
 | `IMPACT_LEVEL` | `low` | `low` \| `moderate` \| `high` |
 | `DATA_CLASSIFICATION` | `public` | `public` \| `CUI` \| `sensitive` |
-| `A11Y_MODE` | `false` | `true` enables the WCAG 2.1 AA build + screen-reader stream buffering. |
+| `A11Y_MODE` | `false` | `true` enables the WCAG 2.1 AA build, **forces reduced motion app-wide**, and turns on screen-reader stream buffering. |
 | `STREAM_BUFFER_MS` | `500` | Announcement buffering window for `aria-live` (only complete sentences are announced). |
-| `ENFORCE_DATA_RESIDENCY` | `false` | `true` restricts operations to `ALLOWED_REGIONS`. |
+| `ENFORCE_DATA_RESIDENCY` | `false` | `true` validates `AWS_REGION` / `VERTEX_LOCATION` against `ALLOWED_REGIONS` at startup (see above). |
 | `ALLOWED_REGIONS` | `us-east-1,us-west-2` | Permitted regions (federal: `us-gov-west-1,us-gov-east-1`). |
+
+> `CACHE_INVALIDATE_ON_MODEL_CHANGE=true` (default) drops cache entries produced by a **previous** model when `LLM_MODEL` changes, so old-model answers are never served under a new model. See [Response cache](#response-cache).
 
 Federal deployments also set `PII_REDACTION_ENABLED=true`, `AUDIT_LOG_ENABLED=true` (typically `cloudwatch`, `AUDIT_LOG_RETENTION_DAYS=1095`, `LOG_QUERY_HASHES=true`), `AUTH_PROVIDER=saml`, and `HYBRID_SEARCH=true`. See [`federal/.env.federal.example`](federal/.env.federal.example) for a complete worked config.
 

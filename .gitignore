@@ -7,6 +7,9 @@ dist/
 out/
 *.tsbuildinfo
 
+# Generated embeddable widget bundle (built into the web app's public dir at build time)
+apps/web/public/widget.js
+
 # Turborepo
 .turbo/
 

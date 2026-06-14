@@ -12,6 +12,12 @@
 
 ## 1. What the federal tier is
 
+> **This is a federal-oriented template / starting point, not a "federal-ready",
+> "FedRAMP-ready", or "compliant" product.** It does not, by itself, confer any
+> authorization. It still requires your own ATO and an independent 3PAO (or
+> agency-designated) assessment. What it gives you is a hardened configuration profile
+> and a head start on the compliance package — not the package itself.
+
 The federal tier (Tier 3 in the credential model — see `README.md#configuration`) is a
 hardened configuration profile that re-routes every external dependency inside a FedRAMP
 authorization boundary and enables the controls a federal system requires:

@@ -137,7 +137,20 @@ The ability to write to the knowledge base is a privileged operation: poisoning 
 
 ### Dependency vulnerability scanning — every PR
 
-Run `npm audit` in CI **on every pull request**; fail the build on high/critical advisories. **Federal** adds agency-approved **SAST/DAST** tooling on top of `npm audit`.
+CI runs `npm audit` **on every pull request**: it **hard-fails on CRITICAL production vulnerabilities** and reports high/moderate ones for triage. **Federal** adds agency-approved **SAST/DAST** tooling on top of `npm audit`. Triage locally with the production-only view:
+
+```bash
+npm audit --omit=dev    # production dependency tree only — what CI gates on
+```
+
+### Known vulnerabilities
+
+A small set of advisories cannot be cleared by a patch bump today; they are tracked, not ignored. CI gates on CRITICAL **production** vulns, so none of these block a deploy — but know what they are:
+
+- **Next.js (DoS / cache-poisoning-class advisories).** The fix is only available in **Next.js 15 / React 19**, which is a breaking major upgrade. It is **tracked as a planned major upgrade**; in the meantime the app pins the **latest patched 14.2.x** (`next ^14.2.35`) to stay current within the 14 line.
+- **botframework / botbuilder chain (Teams bot only).** `botbuilder` transitively pulls older `uuid`, `msal`, and `gaxios`, surfacing **moderate** advisories. These affect **only the Teams bot adapter** (`apps/bot`), not the web app, widget, or core pipeline, and are **fixable only when `botbuilder` updates** its own dependencies. Skip if you don't deploy the Teams target.
+
+Re-check both whenever you bump dependencies (monthly): once Next 15/React 19 is adopted and `botbuilder` refreshes its tree, these clear.
 
 ### Prompt-injection monitoring — weekly
 

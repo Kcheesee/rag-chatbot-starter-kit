@@ -50,6 +50,40 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  docker-build:
+    runs-on: ubuntu-latest
+    # Verifies the production image actually builds (multi-stage, non-root) — catches
+    # Dockerfile drift that the workspace build alone would miss. No push.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -f docker/Dockerfile -t rag-chat-agent:ci .
+
+  iac-validate:
+    runs-on: ubuntu-latest
+    # Static validation of the federal IaC: Terraform (GovCloud) and the Azure-Gov ARM
+    # template. Runs offline (no cloud credentials) so it's safe on every PR. The ARM
+    # JSON well-formedness is a hard gate; terraform fmt/validate is reported but
+    # non-blocking (it depends on provider plugin resolution in the runner).
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Azure-Gov ARM templates are well-formed JSON
+        run: |
+          for f in federal/infra/azure-gov/*.json; do
+            echo "Validating $f"
+            node -e "JSON.parse(require('node:fs').readFileSync('$f','utf8'))"
+          done
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+      - name: terraform fmt + validate (GovCloud, non-blocking)
+        working-directory: federal/infra/terraform-govcloud
+        continue-on-error: true
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
   audit:
     runs-on: ubuntu-latest
     steps:
