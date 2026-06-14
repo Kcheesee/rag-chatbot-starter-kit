@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Test coverage
+coverage/
+
+# Secrets — NEVER commit real credentials. Only *.example files are tracked.
+.env
+.env.local
+.env.*.local
+.env.federal
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Generated reports
+reports/

@@ -1,0 +1,20 @@
+{
+  "name": "@rag-chat-agent/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Next.js 14 App Router chat UI + streaming API.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@rag-chat-agent/audit-logger": "*",
+    "@rag-chat-agent/ingestion": "*",
+    "@rag-chat-agent/llm-adapters": "*",
+    "@rag-chat-agent/rag-core": "*",
+    "@rag-chat-agent/ui-components": "*",
+    "@rag-chat-agent/vector-adapters": "*"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@rag-chat-agent/rag-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The RAG pipeline: retriever, reranker, response cache with source grounding, accuracy guardrails, session stores, and the validated env schema.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./env": "./src/env/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@rag-chat-agent/audit-logger": "*",
+    "@rag-chat-agent/llm-adapters": "*",
+    "@rag-chat-agent/vector-adapters": "*"
+  }
+}

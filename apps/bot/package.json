@@ -1,0 +1,16 @@
+{
+  "name": "@rag-chat-agent/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Slack (Bolt) + Teams (Bot Framework) adapters sharing the rag-core pipeline.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@rag-chat-agent/audit-logger": "*",
+    "@rag-chat-agent/rag-core": "*"
+  }
+}

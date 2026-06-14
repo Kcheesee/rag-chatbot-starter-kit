@@ -1,0 +1,16 @@
+{
+  "name": "@rag-chat-agent/audit-logger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NIST 800-53-format structured audit log emitter. Built first — everything depends on it for observability.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+package-lock.json
+
+# Spec documents — kept verbatim, not reflowed.
+README.md
+docs/BUILD-PROMPT.md

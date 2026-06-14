@@ -1,0 +1,41 @@
+{
+  "name": "rag-chat-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-ready, config-driven RAG chatbot boilerplate. Any LLM, any vector store, three deployment surfaces, an opt-in federal tier.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "ingest": "tsx scripts/ingest.ts",
+    "seed": "tsx scripts/seed.ts",
+    "audit-report": "tsx scripts/audit-report.ts",
+    "knowledge-health": "tsx scripts/knowledge-health.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}
