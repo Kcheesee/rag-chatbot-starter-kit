@@ -1,0 +1,693 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "STARTING TEMPLATE — Azure Government ARM deployment for the rag-chat-agent federal tier. Azure-equivalent of the AWS GovCloud stack (ECS + Aurora pgvector + ElastiCache). Provisions a VNet (app + data subnets), Azure Container Apps for the Next.js API, Azure Database for PostgreSQL Flexible Server (pgvector), Azure Cache for Redis, and a Key Vault. Azure OpenAI is consumed via a *.openai.azure.us endpoint. THIS IS A STARTING POINT — review and harden for the agency ATO (NIST 800-53 / FedRAMP) before production use.",
+    "author": "rag-chat-agent federal tier"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "usgovvirginia",
+      "metadata": {
+        "description": "Azure Government region. Defaults to US Gov Virginia. Ensure all resource SKUs are available in the chosen Gov region."
+      }
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "ragchat",
+      "minLength": 3,
+      "maxLength": 12,
+      "metadata": {
+        "description": "Short prefix used to derive resource names. Lowercase alphanumeric recommended (used in globally-unique names)."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "fed",
+      "allowedValues": [
+        "fed",
+        "dev",
+        "stage",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment suffix folded into derived resource names."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "myregistry.azurecr.us/rag-chat-agent/web:latest",
+      "metadata": {
+        "description": "Fully-qualified container image for the Next.js API. Use an Azure Government container registry (*.azurecr.us). The container listens on port 3000."
+      }
+    },
+    "containerRegistryServer": {
+      "type": "string",
+      "defaultValue": "myregistry.azurecr.us",
+      "metadata": {
+        "description": "Container registry login server hosting the image. The Container App's managed identity should be granted AcrPull on this registry (configure post-deploy)."
+      }
+    },
+    "dbAdminLogin": {
+      "type": "string",
+      "defaultValue": "ragchatadmin",
+      "metadata": {
+        "description": "PostgreSQL Flexible Server administrator login name."
+      }
+    },
+    "dbAdminPassword": {
+      "type": "secureString",
+      "metadata": {
+        "description": "PostgreSQL Flexible Server administrator password. Provide at deploy time; do NOT commit. Stored into Key Vault by this template and surfaced to the app via Key Vault reference."
+      }
+    },
+    "azureOpenAiEndpoint": {
+      "type": "string",
+      "defaultValue": "https://your-gov-openai.openai.azure.us",
+      "metadata": {
+        "description": "Azure OpenAI endpoint in Azure Government (a *.openai.azure.us resource). Consumed by the app as AZURE_OPENAI_ENDPOINT. Set deployToCognitiveServices=true to also provision a Cognitive Services account here."
+      }
+    },
+    "azureOpenAiApiKey": {
+      "type": "secureString",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Azure OpenAI API key. Prefer managed identity / RBAC over keys where supported. Stored into Key Vault when non-empty."
+      }
+    },
+    "azureOpenAiApiVersion": {
+      "type": "string",
+      "defaultValue": "2024-08-01-preview",
+      "metadata": {
+        "description": "Azure OpenAI API version used by the app."
+      }
+    },
+    "azureOpenAiDeployment": {
+      "type": "string",
+      "defaultValue": "gpt-4o-prod",
+      "metadata": {
+        "description": "Azure OpenAI deployment name used by the app."
+      }
+    },
+    "deployCognitiveServices": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "When true, provision an optional Cognitive Services (OpenAI kind) account. When false, only the endpoint parameter is wired into the app. Confirm Azure OpenAI availability and access approval in your Gov subscription before enabling."
+      }
+    },
+    "postgresVersion": {
+      "type": "string",
+      "defaultValue": "16",
+      "allowedValues": [
+        "14",
+        "15",
+        "16"
+      ],
+      "metadata": {
+        "description": "PostgreSQL major version for the Flexible Server."
+      }
+    },
+    "postgresSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_D2ds_v5",
+      "metadata": {
+        "description": "Compute SKU for the PostgreSQL Flexible Server."
+      }
+    },
+    "postgresStorageSizeGB": {
+      "type": "int",
+      "defaultValue": 128,
+      "metadata": {
+        "description": "Allocated storage (GB) for the PostgreSQL Flexible Server."
+      }
+    },
+    "containerCpu": {
+      "type": "string",
+      "defaultValue": "1.0",
+      "metadata": {
+        "description": "vCPU allocation per container replica (Container Apps requires CPU/memory in approved ratios)."
+      }
+    },
+    "containerMemory": {
+      "type": "string",
+      "defaultValue": "2.0Gi",
+      "metadata": {
+        "description": "Memory allocation per container replica."
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Minimum Container App replica count."
+      }
+    },
+    "maxReplicas": {
+      "type": "int",
+      "defaultValue": 5,
+      "metadata": {
+        "description": "Maximum Container App replica count."
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
+    "baseName": "[concat(parameters('namePrefix'), '-', parameters('environment'))]",
+    "vnetName": "[concat(variables('baseName'), '-vnet')]",
+    "appSubnetName": "app-subnet",
+    "dataSubnetName": "data-subnet",
+    "logAnalyticsName": "[concat(variables('baseName'), '-logs')]",
+    "containerEnvName": "[concat(variables('baseName'), '-cae')]",
+    "containerAppName": "[concat(variables('baseName'), '-api')]",
+    "postgresServerName": "[toLower(concat(parameters('namePrefix'), parameters('environment'), 'pg', variables('uniqueSuffix')))]",
+    "postgresDatabaseName": "ragchat",
+    "postgresPrivateDnsZoneName": "[concat(variables('postgresServerName'), '.private.postgres.database.usgovcloudapi.net')]",
+    "redisName": "[toLower(concat(parameters('namePrefix'), parameters('environment'), 'redis', variables('uniqueSuffix')))]",
+    "keyVaultName": "[take(toLower(concat(parameters('namePrefix'), parameters('environment'), 'kv', variables('uniqueSuffix'))), 24)]",
+    "cognitiveServicesName": "[toLower(concat(parameters('namePrefix'), parameters('environment'), 'aoai', variables('uniqueSuffix')))]",
+    "dbPasswordSecretName": "postgres-admin-password",
+    "redisSecretName": "redis-connection-string",
+    "openAiKeySecretName": "azure-openai-api-key",
+    "commonTags": {
+      "deployment_mode": "federal",
+      "application": "rag-chat-agent",
+      "managed_by": "arm-template"
+    }
+  },
+  "resources": [
+    {
+      "comments": "Virtual network with an app subnet (delegated to Container Apps) and a data subnet (PostgreSQL delegation + service endpoints).",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.40.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('appSubnetName')]",
+            "properties": {
+              "addressPrefix": "10.40.0.0/23",
+              "delegations": [
+                {
+                  "name": "containerapp-delegation",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ],
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.KeyVault"
+                }
+              ]
+            }
+          },
+          {
+            "name": "[variables('dataSubnetName')]",
+            "properties": {
+              "addressPrefix": "10.40.2.0/24",
+              "delegations": [
+                {
+                  "name": "postgres-flexible-delegation",
+                  "properties": {
+                    "serviceName": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                }
+              ],
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.KeyVault"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "comments": "Private DNS zone for the PostgreSQL Flexible Server (private access).",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('postgresPrivateDnsZoneName')]",
+      "location": "global",
+      "tags": "[variables('commonTags')]"
+    },
+    {
+      "comments": "Links the PostgreSQL private DNS zone to the VNet so the app subnet can resolve the server FQDN.",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[concat(variables('postgresPrivateDnsZoneName'), '/', concat(variables('vnetName'), '-link'))]",
+      "location": "global",
+      "tags": "[variables('commonTags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresPrivateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      }
+    },
+    {
+      "comments": "Log Analytics workspace backing the Container Apps managed environment (required for Container Apps logging).",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 90,
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        }
+      }
+    },
+    {
+      "comments": "Key Vault for application secrets. RBAC authorization enabled; soft-delete + purge protection on. The Container App's system-assigned managed identity is granted secret get/list via RBAC role assignment below.",
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enableRbacAuthorization": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 90,
+        "enablePurgeProtection": true,
+        "publicNetworkAccess": "Disabled",
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Deny",
+          "virtualNetworkRules": [
+            {
+              "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('appSubnetName'))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "comments": "PostgreSQL admin password secret.",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[concat(variables('keyVaultName'), '/', variables('dbPasswordSecretName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('dbAdminPassword')]",
+        "contentType": "text/plain"
+      }
+    },
+    {
+      "comments": "Redis primary connection string secret (built from the provisioned cache key).",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[concat(variables('keyVaultName'), '/', variables('redisSecretName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.Cache/redis', variables('redisName'))]"
+      ],
+      "properties": {
+        "value": "[concat(variables('redisName'), '.redis.cache.usgovcloudapi.net:6380,password=', listKeys(resourceId('Microsoft.Cache/redis', variables('redisName')), '2023-08-01').primaryKey, ',ssl=True,abortConnect=False')]",
+        "contentType": "text/plain"
+      }
+    },
+    {
+      "comments": "Optional Azure OpenAI API key secret. Only written when a non-empty key is supplied; prefer managed-identity RBAC over keys.",
+      "condition": "[not(empty(parameters('azureOpenAiApiKey')))]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[concat(variables('keyVaultName'), '/', variables('openAiKeySecretName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('azureOpenAiApiKey')]",
+        "contentType": "text/plain"
+      }
+    },
+    {
+      "comments": "Azure Database for PostgreSQL Flexible Server. Private access into the data subnet via VNet integration + private DNS. TLS required. IMPORTANT: the pgvector 'vector' extension must be allow-listed via the azure.extensions server parameter (set below) AND created in the database (CREATE EXTENSION vector) before pgvector queries will work.",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[variables('postgresServerName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "[parameters('postgresSkuName')]",
+        "tier": "GeneralPurpose"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.Network/privateDnsZones/virtualNetworkLinks', variables('postgresPrivateDnsZoneName'), concat(variables('vnetName'), '-link'))]"
+      ],
+      "properties": {
+        "version": "[parameters('postgresVersion')]",
+        "administratorLogin": "[parameters('dbAdminLogin')]",
+        "administratorLoginPassword": "[parameters('dbAdminPassword')]",
+        "createMode": "Default",
+        "storage": {
+          "storageSizeGB": "[parameters('postgresStorageSizeGB')]",
+          "autoGrow": "Enabled"
+        },
+        "backup": {
+          "backupRetentionDays": 14,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "delegatedSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('dataSubnetName'))]",
+          "privateDnsZoneArmResourceId": "[resourceId('Microsoft.Network/privateDnsZones', variables('postgresPrivateDnsZoneName'))]",
+          "publicNetworkAccess": "Disabled"
+        }
+      }
+    },
+    {
+      "comments": "Enforce TLS and allow-list the pgvector extension. require_secure_transport=ON forces TLS; azure.extensions must list VECTOR for the 'vector' extension to be creatable. After deploy, run: CREATE EXTENSION IF NOT EXISTS vector;",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[concat(variables('postgresServerName'), '/require_secure_transport')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ],
+      "properties": {
+        "value": "ON",
+        "source": "user-override"
+      }
+    },
+    {
+      "comments": "Allow-list the pgvector extension on the server. The application (or a migration step) must then CREATE EXTENSION vector; inside the target database.",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[concat(variables('postgresServerName'), '/azure.extensions')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', variables('postgresServerName'), 'require_secure_transport')]"
+      ],
+      "properties": {
+        "value": "VECTOR",
+        "source": "user-override"
+      }
+    },
+    {
+      "comments": "Application database.",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2023-12-01-preview",
+      "name": "[concat(variables('postgresServerName'), '/', variables('postgresDatabaseName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', variables('postgresServerName'), 'azure.extensions')]"
+      ],
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      }
+    },
+    {
+      "comments": "Azure Cache for Redis for sessions/cache. TLS-only (non-SSL port disabled, minimum TLS 1.2). Public network access disabled — reach it via private endpoint or VNet (configure a private endpoint for the data subnet as a hardening step).",
+      "type": "Microsoft.Cache/redis",
+      "apiVersion": "2023-08-01",
+      "name": "[variables('redisName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "name": "Standard",
+          "family": "C",
+          "capacity": 1
+        },
+        "enableNonSslPort": false,
+        "minimumTlsVersion": "1.2",
+        "publicNetworkAccess": "Disabled",
+        "redisConfiguration": {
+          "maxmemory-policy": "allkeys-lru"
+        }
+      }
+    },
+    {
+      "comments": "Optional Cognitive Services account (OpenAI kind) in Azure Government. Only deployed when deployCognitiveServices=true; otherwise the app uses the parameterized azureOpenAiEndpoint (a *.openai.azure.us resource managed elsewhere). Confirm Azure OpenAI access approval for your Gov subscription before enabling.",
+      "condition": "[parameters('deployCognitiveServices')]",
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2023-10-01-preview",
+      "name": "[variables('cognitiveServicesName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "kind": "OpenAI",
+      "sku": {
+        "name": "S0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "customSubDomainName": "[variables('cognitiveServicesName')]",
+        "publicNetworkAccess": "Disabled",
+        "networkAcls": {
+          "defaultAction": "Deny"
+        }
+      }
+    },
+    {
+      "comments": "Container Apps managed environment, VNet-integrated on the app subnet. Internal-only ingress vnet configuration; logs to Log Analytics.",
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('containerEnvName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ],
+      "properties": {
+        "vnetConfiguration": {
+          "infrastructureSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('appSubnetName'))]",
+          "internal": true
+        },
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2022-10-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2022-10-01').primarySharedKey]"
+          }
+        },
+        "zoneRedundant": false
+      }
+    },
+    {
+      "comments": "The Next.js API as an Azure Container App. System-assigned managed identity; container listens on port 3000. Non-secret config is passed as plain env vars; secrets are passed via secretRef bound to Key Vault references resolved with the managed identity. NOTE: ordering — the role assignment granting Key Vault access is a sibling resource; for a first deploy the platform resolves Key Vault secretref at container start. If you hit a startup race, deploy in two passes or move secrets into managed-identity-resolved secretref after the role assignment propagates.",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('containerAppName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('containerEnvName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('dbPasswordSecretName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('redisSecretName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', variables('postgresServerName'), variables('postgresDatabaseName'))]",
+        "[resourceId('Microsoft.Cache/redis', variables('redisName'))]"
+      ],
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('containerEnvName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": false,
+            "targetPort": 3000,
+            "transport": "auto",
+            "allowInsecure": false,
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          },
+          "registries": [
+            {
+              "server": "[parameters('containerRegistryServer')]",
+              "identity": "system"
+            }
+          ],
+          "secrets": [
+            {
+              "name": "[variables('dbPasswordSecretName')]",
+              "keyVaultUrl": "[concat('https://', variables('keyVaultName'), '.vault.usgovcloudapi.net/secrets/', variables('dbPasswordSecretName'))]",
+              "identity": "system"
+            },
+            {
+              "name": "[variables('redisSecretName')]",
+              "keyVaultUrl": "[concat('https://', variables('keyVaultName'), '.vault.usgovcloudapi.net/secrets/', variables('redisSecretName'))]",
+              "identity": "system"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "rag-chat-api",
+              "image": "[parameters('containerImage')]",
+              "resources": {
+                "cpu": "[json(parameters('containerCpu'))]",
+                "memory": "[parameters('containerMemory')]"
+              },
+              "env": [
+                {
+                  "name": "NODE_ENV",
+                  "value": "production"
+                },
+                {
+                  "name": "PORT",
+                  "value": "3000"
+                },
+                {
+                  "name": "DEPLOYMENT_MODE",
+                  "value": "federal"
+                },
+                {
+                  "name": "A11Y_MODE",
+                  "value": "true"
+                },
+                {
+                  "name": "LLM_PROVIDER",
+                  "value": "azure-openai"
+                },
+                {
+                  "name": "AZURE_OPENAI_ENDPOINT",
+                  "value": "[parameters('azureOpenAiEndpoint')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_API_VERSION",
+                  "value": "[parameters('azureOpenAiApiVersion')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_DEPLOYMENT",
+                  "value": "[parameters('azureOpenAiDeployment')]"
+                },
+                {
+                  "name": "VECTOR_STORE",
+                  "value": "pgvector"
+                },
+                {
+                  "name": "PGHOST",
+                  "value": "[concat(variables('postgresServerName'), '.postgres.database.usgovcloudapi.net')]"
+                },
+                {
+                  "name": "PGPORT",
+                  "value": "5432"
+                },
+                {
+                  "name": "PGDATABASE",
+                  "value": "[variables('postgresDatabaseName')]"
+                },
+                {
+                  "name": "PGUSER",
+                  "value": "[parameters('dbAdminLogin')]"
+                },
+                {
+                  "name": "PGSSLMODE",
+                  "value": "require"
+                },
+                {
+                  "name": "PGPASSWORD",
+                  "secretRef": "[variables('dbPasswordSecretName')]"
+                },
+                {
+                  "name": "REDIS_URL",
+                  "secretRef": "[variables('redisSecretName')]"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": "[parameters('maxReplicas')]"
+          }
+        }
+      }
+    },
+    {
+      "comments": "RBAC role assignment granting the Container App's system-assigned managed identity 'Key Vault Secrets User' (get/list on secrets) on the Key Vault. Role definition id 4633458b-17de-408a-b874-0445c86b69e6 is the built-in 'Key Vault Secrets User'.",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), variables('containerAppName'), 'kv-secrets-user')]",
+      "scope": "[concat('Microsoft.KeyVault/vaults/', variables('keyVaultName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.App/containerApps', variables('containerAppName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2024-03-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "containerAppName": {
+      "type": "string",
+      "value": "[variables('containerAppName')]"
+    },
+    "containerAppFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "containerAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('containerAppName')), '2024-03-01', 'full').identity.principalId]"
+    },
+    "postgresFqdn": {
+      "type": "string",
+      "value": "[concat(variables('postgresServerName'), '.postgres.database.usgovcloudapi.net')]"
+    },
+    "postgresDatabaseName": {
+      "type": "string",
+      "value": "[variables('postgresDatabaseName')]"
+    },
+    "redisHostName": {
+      "type": "string",
+      "value": "[concat(variables('redisName'), '.redis.cache.usgovcloudapi.net')]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[variables('keyVaultName')]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[concat('https://', variables('keyVaultName'), '.vault.usgovcloudapi.net/')]"
+    },
+    "azureOpenAiEndpoint": {
+      "type": "string",
+      "value": "[if(parameters('deployCognitiveServices'), reference(resourceId('Microsoft.CognitiveServices/accounts', variables('cognitiveServicesName')), '2023-10-01-preview').endpoint, parameters('azureOpenAiEndpoint'))]"
+    },
+    "postNote": {
+      "type": "string",
+      "value": "STARTING TEMPLATE — review/harden for the agency ATO. After deploy: (1) connect to the database and run CREATE EXTENSION IF NOT EXISTS vector; (2) grant the Container App identity AcrPull on the container registry; (3) add private endpoints for Redis/Key Vault as needed."
+    }
+  }
+}

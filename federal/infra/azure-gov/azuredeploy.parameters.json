@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "usgovvirginia"
+    },
+    "namePrefix": {
+      "value": "ragchat"
+    },
+    "environment": {
+      "value": "fed"
+    },
+    "containerImage": {
+      "value": "REPLACE_ME.azurecr.us/rag-chat-agent/web:latest"
+    },
+    "containerRegistryServer": {
+      "value": "REPLACE_ME.azurecr.us"
+    },
+    "dbAdminLogin": {
+      "value": "ragchatadmin"
+    },
+    "dbAdminPassword": {
+      "value": "REPLACE_WITH_A_STRONG_SECRET_AT_DEPLOY_TIME"
+    },
+    "azureOpenAiEndpoint": {
+      "value": "https://REPLACE_ME-gov-openai.openai.azure.us"
+    },
+    "azureOpenAiApiKey": {
+      "value": ""
+    },
+    "azureOpenAiApiVersion": {
+      "value": "2024-08-01-preview"
+    },
+    "azureOpenAiDeployment": {
+      "value": "gpt-4o-prod"
+    },
+    "deployCognitiveServices": {
+      "value": false
+    },
+    "postgresVersion": {
+      "value": "16"
+    },
+    "postgresSkuName": {
+      "value": "Standard_D2ds_v5"
+    },
+    "postgresStorageSizeGB": {
+      "value": 128
+    },
+    "containerCpu": {
+      "value": "1.0"
+    },
+    "containerMemory": {
+      "value": "2.0Gi"
+    },
+    "minReplicas": {
+      "value": 1
+    },
+    "maxReplicas": {
+      "value": 5
+    }
+  }
+}
