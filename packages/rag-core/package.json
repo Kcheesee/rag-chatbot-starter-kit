@@ -17,6 +17,8 @@
   "dependencies": {
     "@rag-chat-agent/audit-logger": "*",
     "@rag-chat-agent/llm-adapters": "*",
-    "@rag-chat-agent/vector-adapters": "*"
+    "@rag-chat-agent/vector-adapters": "*",
+    "ioredis": "^5.4.1",
+    "zod": "^3.23.8"
   }
 }
