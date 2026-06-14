@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Self-contained, iframe-sandboxed embeddable <script> chat widget.",
+  "description": "Self-contained, iframe-sandboxed embeddable <script> chat widget loader.",
   "scripts": {
+    "build": "esbuild src/loader.ts --bundle --minify --format=iife --target=es2018 --outfile=dist/widget.js",
+    "dev": "esbuild src/loader.ts --bundle --format=iife --target=es2018 --outfile=dist/widget.js --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": {
-    "@rag-chat-agent/ui-components": "*"
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }
