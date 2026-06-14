@@ -5,12 +5,16 @@
   "type": "module",
   "description": "Slack (Bolt) + Teams (Bot Framework) adapters sharing the rag-core pipeline.",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@rag-chat-agent/audit-logger": "*",
-    "@rag-chat-agent/rag-core": "*"
+    "@rag-chat-agent/rag-core": "*",
+    "@slack/bolt": "^4.2.0",
+    "botbuilder": "^4.23.2"
   }
 }
