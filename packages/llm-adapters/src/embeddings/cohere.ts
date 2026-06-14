@@ -3,7 +3,7 @@
  * SDK to keep this package's dependency surface small.
  */
 
-import type { EmbeddingAdapter } from "../types";
+import type { EmbeddingAdapter, EmbeddingMode } from "../types";
 import { requireConfig, type EmbeddingConfig } from "../config";
 import { dimensionsFor } from "./dimensions";
 
@@ -21,19 +21,21 @@ export class CohereEmbeddingAdapter implements EmbeddingAdapter {
     this.apiKey = requireConfig(cfg.COHERE_API_KEY, "COHERE_API_KEY", "Get a key from dashboard.cohere.com.");
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], mode: EmbeddingMode = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
+    // Cohere is asymmetric: queries MUST be embedded as "search_query" to align with
+    // content indexed as "search_document". Sending the wrong type silently hurts recall.
+    const inputType = mode === "query" ? "search_query" : "search_document";
     const res = await fetch(COHERE_EMBED_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       },
-      // `search_document` is the correct input_type for content being indexed.
       body: JSON.stringify({
         model: this.model,
         texts,
-        input_type: "search_document",
+        input_type: inputType,
         embedding_types: ["float"],
       }),
     });
@@ -45,8 +47,8 @@ export class CohereEmbeddingAdapter implements EmbeddingAdapter {
     return json.embeddings?.float ?? [];
   }
 
-  async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
+  async embedOne(text: string, mode: EmbeddingMode = "document"): Promise<number[]> {
+    const [vector] = await this.embed([text], mode);
     return vector ?? [];
   }
 }

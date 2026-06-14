@@ -6,7 +6,7 @@
 
 import type { GoogleAuth } from "google-auth-library";
 
-import type { EmbeddingAdapter } from "../types";
+import type { EmbeddingAdapter, EmbeddingMode } from "../types";
 import { requireConfig, type EmbeddingConfig } from "../config";
 import { dimensionsFor } from "./dimensions";
 
@@ -33,7 +33,7 @@ export class VertexEmbeddingAdapter implements EmbeddingAdapter {
     return this.auth;
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], mode: EmbeddingMode = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
     const auth = await this.getAuth();
     const token = await (await auth.getClient()).getAccessToken();
@@ -43,10 +43,13 @@ export class VertexEmbeddingAdapter implements EmbeddingAdapter {
       `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.project}` +
       `/locations/${this.location}/publishers/google/models/${this.model}:predict`;
 
+    // Vertex text-embedding models take a per-instance task_type; RETRIEVAL_QUERY vs
+    // RETRIEVAL_DOCUMENT is the asymmetric pair that aligns queries with indexed docs.
+    const taskType = mode === "query" ? "RETRIEVAL_QUERY" : "RETRIEVAL_DOCUMENT";
     const res = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ instances: texts.map((content) => ({ content })) }),
+      body: JSON.stringify({ instances: texts.map((content) => ({ content, task_type: taskType })) }),
     });
     if (!res.ok) {
       throw new Error(`Vertex embed failed: ${res.status} ${res.statusText} — ${await res.text()}`);
@@ -57,8 +60,8 @@ export class VertexEmbeddingAdapter implements EmbeddingAdapter {
     return (json.predictions ?? []).map((p) => p.embeddings?.values ?? []);
   }
 
-  async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
+  async embedOne(text: string, mode: EmbeddingMode = "document"): Promise<number[]> {
+    const [vector] = await this.embed([text], mode);
     return vector ?? [];
   }
 }

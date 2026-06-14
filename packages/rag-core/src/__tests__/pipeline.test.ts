@@ -57,6 +57,7 @@ function vectorStore(results: SearchResult[], byId: Record<string, StoredChunk> 
     },
     async upsert() {},
     async delete() {},
+    async deleteBySource() {},
     async getById(id) {
       return byId[id] ?? null;
     },

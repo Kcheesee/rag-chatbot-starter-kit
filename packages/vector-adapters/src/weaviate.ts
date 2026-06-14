@@ -92,6 +92,10 @@ interface WeaviateCollection {
   readonly data: {
     insertMany(objects: WeaviateInsert[]): Promise<unknown>;
     deleteById(id: string): Promise<unknown>;
+    // Native filtered batch delete: removes every object matching `where` in one
+    // round-trip. `deleteBySource` rides on this so a source that produced thousands
+    // of chunks clears without a query-then-delete-per-uuid loop.
+    deleteMany(where: WeaviateFilterValue): Promise<unknown>;
   };
   readonly query: {
     nearVector(
@@ -337,6 +341,24 @@ export class WeaviateAdapter implements VectorAdapter {
     await Promise.all(
       ids.map(async (id) => collection.data.deleteById(await this.derivedUuid(id))),
     );
+  }
+
+  /**
+   * Delete every chunk in this namespace that came from `sourceFile`. Called before
+   * re-ingesting a source so stale chunks (e.g. trailing chunks of a now-shorter doc)
+   * don't linger and get retrieved. Idempotent: deleting an absent source is a no-op.
+   *
+   * We reuse {@link buildFilter} so the delete is AND-scoped to `namespace == this.ns`
+   * (the same tenant safety belt every read carries) combined with the
+   * `sourceFile == sourceFile` equality. A single native `data.deleteMany(filter)`
+   * removes all matching objects server-side, avoiding a query-then-deleteById-per-uuid
+   * loop that would scale with chunk count. A filter that matches nothing deletes
+   * nothing, which gives us idempotency for free.
+   */
+  async deleteBySource(sourceFile: string): Promise<void> {
+    const collection = await this.getCollection();
+    const filters = await this.buildFilter(collection, { sourceFile });
+    await collection.data.deleteMany(filters);
   }
 
   async getById(id: string): Promise<StoredChunk | null> {

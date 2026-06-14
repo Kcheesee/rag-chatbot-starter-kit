@@ -87,6 +87,16 @@ export async function ingest(
     const embedder = deps.embedder;
     const store = deps.vectorStore.namespace(namespace);
     const batchSize = deps.embedBatchSize ?? DEFAULT_BATCH;
+
+    // Remove stale chunks for every source in this run BEFORE writing fresh ones.
+    // Chunk ids are deterministic, so re-ingesting identical content overwrites in
+    // place — but a source that shrank or was re-chunked would otherwise orphan its
+    // old trailing chunks. Deleting by source first guarantees the store reflects
+    // exactly the current document.
+    const sources = [...new Set(allChunks.map((c) => c.metadata.sourceFile))];
+    for (const sourceFile of sources) {
+      await store.deleteBySource(sourceFile);
+    }
     for (let i = 0; i < allChunks.length; i += batchSize) {
       const batch = allChunks.slice(i, i + batchSize);
       const vectors = await embedder.embed(batch.map((c) => c.text));

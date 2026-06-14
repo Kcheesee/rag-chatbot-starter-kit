@@ -80,6 +80,13 @@ export interface VectorAdapter {
   upsert(chunks: EmbeddedChunk[]): Promise<void>;
   /** Delete chunks by id. */
   delete(ids: string[]): Promise<void>;
+  /**
+   * Delete every chunk in this namespace originating from `sourceFile`. Called on
+   * re-ingest so a source's stale chunks (e.g. trailing chunks of a now-shorter
+   * document) are removed before its fresh chunks are written, rather than lingering
+   * and being retrieved. Idempotent — deleting an absent source is a no-op.
+   */
+  deleteBySource(sourceFile: string): Promise<void>;
   /** Fetch a single chunk by id, or null if absent. Required for cache grounding. */
   getById(id: string): Promise<StoredChunk | null>;
   /** Return a namespace-scoped view of this adapter. */

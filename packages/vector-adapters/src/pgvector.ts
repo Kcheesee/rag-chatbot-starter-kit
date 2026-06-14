@@ -357,6 +357,26 @@ export class PgVectorAdapter implements VectorAdapter {
   }
 
   /**
+   * Delete every chunk in this namespace that came from `sourceFile`. Called before
+   * re-ingesting a source so stale chunks (e.g. trailing chunks of a now-shorter doc)
+   * don't linger and get retrieved. Idempotent: deleting an absent source is a no-op.
+   *
+   * `sourceFile` lives inside the `metadata` jsonb under the flattened top-level key
+   * `sourceFile`, so we match on `metadata->>'sourceFile'` (the `->>` operator returns
+   * the value as text, which compares cleanly to the bound string). The
+   * `namespace = $1` clause is the same tenant safety belt as {@link delete}: a source
+   * path can recur across namespaces, and a tenant must only ever clear its own rows.
+   * Both values are bound as parameters; only the validated table name is interpolated.
+   */
+  async deleteBySource(sourceFile: string): Promise<void> {
+    const pool = await this.ready();
+    await pool.query(
+      `DELETE FROM ${this.table} WHERE namespace = $1 AND metadata->>'sourceFile' = $2;`,
+      [this.ns, sourceFile],
+    );
+  }
+
+  /**
    * Fetch a single chunk by id within this namespace, or null if absent.
    *
    * Mandatory for the response cache's grounding check, which re-reads the chunk a

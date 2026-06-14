@@ -57,10 +57,26 @@ describe("metadata mapping", () => {
 });
 
 describe("sanitizeNamespace", () => {
-  it("keeps safe tokens and replaces unsafe characters", () => {
-    expect(sanitizeNamespace("acme-corp")).toBe("acme_corp");
-    expect(sanitizeNamespace("a/b c")).toBe("a_b_c");
+  it("returns already-safe names unchanged", () => {
+    expect(sanitizeNamespace("acme")).toBe("acme");
+    expect(sanitizeNamespace("acme_corp")).toBe("acme_corp");
+    expect(sanitizeNamespace("default")).toBe("default");
+  });
+
+  it("falls back to 'default' for an empty namespace", () => {
     expect(sanitizeNamespace("")).toBe("default");
+  });
+
+  it("appends a stable hash when sanitisation is lossy, keeping a readable prefix", () => {
+    expect(sanitizeNamespace("acme-corp")).toMatch(/^acme_corp_[0-9a-f]{8}$/);
+    expect(sanitizeNamespace("a/b c")).toMatch(/^a_b_c_[0-9a-f]{8}$/);
+    // Stable across calls.
+    expect(sanitizeNamespace("acme-corp")).toBe(sanitizeNamespace("acme-corp"));
+  });
+
+  it("is INJECTIVE: inputs that used to collide now map to distinct names", () => {
+    // The whole point of the fix — "acme-corp" and "acme_corp" must not share a store.
+    expect(sanitizeNamespace("acme-corp")).not.toBe(sanitizeNamespace("acme_corp"));
   });
 });
 

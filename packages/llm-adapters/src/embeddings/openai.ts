@@ -2,7 +2,7 @@
 
 import type OpenAI from "openai";
 
-import type { EmbeddingAdapter } from "../types";
+import type { EmbeddingAdapter, EmbeddingMode } from "../types";
 import { requireConfig, type EmbeddingConfig } from "../config";
 import { dimensionsFor } from "./dimensions";
 
@@ -32,7 +32,9 @@ export class OpenAIEmbeddingAdapter implements EmbeddingAdapter {
     return this.client;
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  // OpenAI embeddings are symmetric: documents and queries use the same model with no
+  // input-type distinction, so `mode` is accepted for interface parity but not sent.
+  async embed(texts: string[], _mode: EmbeddingMode = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
     const client = await this.getClient();
     const res = await client.embeddings.create({ model: this.model, input: texts });
@@ -40,8 +42,8 @@ export class OpenAIEmbeddingAdapter implements EmbeddingAdapter {
     return [...res.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
   }
 
-  async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
+  async embedOne(text: string, mode: EmbeddingMode = "document"): Promise<number[]> {
+    const [vector] = await this.embed([text], mode);
     return vector ?? [];
   }
 }

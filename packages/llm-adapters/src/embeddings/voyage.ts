@@ -3,7 +3,7 @@
  * is the natural OpenAI-free default for an all-Anthropic dev stack.
  */
 
-import type { EmbeddingAdapter } from "../types";
+import type { EmbeddingAdapter, EmbeddingMode } from "../types";
 import { requireConfig, type EmbeddingConfig } from "../config";
 import { dimensionsFor } from "./dimensions";
 
@@ -21,7 +21,7 @@ export class VoyageEmbeddingAdapter implements EmbeddingAdapter {
     this.apiKey = requireConfig(cfg.VOYAGE_API_KEY, "VOYAGE_API_KEY", "Get a key from voyageai.com.");
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], mode: EmbeddingMode = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
     const res = await fetch(VOYAGE_EMBED_URL, {
       method: "POST",
@@ -29,7 +29,8 @@ export class VoyageEmbeddingAdapter implements EmbeddingAdapter {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ input: texts, model: this.model, input_type: "document" }),
+      // Voyage's input_type values are literally "document" / "query".
+      body: JSON.stringify({ input: texts, model: this.model, input_type: mode }),
     });
 
     if (!res.ok) {
@@ -39,8 +40,8 @@ export class VoyageEmbeddingAdapter implements EmbeddingAdapter {
     return (json.data ?? []).sort((a, b) => a.index - b.index).map((d) => d.embedding);
   }
 
-  async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
+  async embedOne(text: string, mode: EmbeddingMode = "document"): Promise<number[]> {
+    const [vector] = await this.embed([text], mode);
     return vector ?? [];
   }
 }

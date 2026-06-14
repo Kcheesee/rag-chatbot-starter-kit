@@ -66,7 +66,11 @@ interface ChromaCollection {
     documents: (string | null)[];
     metadatas: (Record<string, unknown> | null)[];
   }>;
-  delete(args: { ids: string[] }): Promise<void>;
+  // `delete` accepts either an explicit id list or a `where` metadata filter (or both).
+  // Both are optional in the SDK; we always pass exactly one of them. The `where` arm
+  // is what `deleteBySource` rides on — it lets the server delete every matching row
+  // without us first listing ids.
+  delete(args: { ids?: string[]; where?: Record<string, unknown> }): Promise<void>;
 }
 
 interface ChromaClientLike {
@@ -261,6 +265,23 @@ export class ChromaAdapter implements VectorAdapter {
     if (ids.length === 0) return;
     const collection = await this.collection();
     await collection.delete({ ids });
+  }
+
+  /**
+   * Delete every chunk in this namespace that came from `sourceFile`. Called before
+   * re-ingesting a source so stale chunks (e.g. trailing chunks of a now-shorter doc)
+   * don't linger and get retrieved. Idempotent: deleting an absent source is a no-op.
+   *
+   * Each namespace already maps to its own collection (see file header), so a
+   * `{ sourceFile }` equality `where` is sufficient to scope the delete to this
+   * tenant — no namespace clause is needed. We let the server evaluate the metadata
+   * filter (the same `where` path `search` uses) rather than listing ids first, so a
+   * source that produced thousands of chunks clears in a single round-trip. Chroma
+   * treats a `where` that matches nothing as a no-op, which gives us idempotency free.
+   */
+  public async deleteBySource(sourceFile: string): Promise<void> {
+    const collection = await this.collection();
+    await collection.delete({ where: { sourceFile } });
   }
 
   /**

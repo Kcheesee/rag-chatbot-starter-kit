@@ -12,6 +12,7 @@ export type {
   TokenUsage,
   LLMAdapter,
   EmbeddingAdapter,
+  EmbeddingMode,
 } from "./types";
 
 export type { LLMConfig, EmbeddingConfig, LLMProvider, EmbeddingProvider } from "./config";

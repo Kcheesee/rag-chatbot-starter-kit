@@ -117,8 +117,9 @@ export class RAGPipelineImpl implements RAGPipeline {
         ? await this.rewriteQuery(query, history)
         : query;
 
-      // 4. Embed the query.
-      const embedding = await this.deps.embedder.embedOne(effectiveQuery);
+      // 4. Embed the query — in "query" mode so asymmetric models (Cohere, Voyage,
+      // Vertex) align it with content indexed in "document" mode.
+      const embedding = await this.deps.embedder.embedOne(effectiveQuery, "query");
       const store = this.deps.vectorStore.namespace(input.namespace);
 
       // 5. Cache check + grounding.

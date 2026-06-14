@@ -6,7 +6,7 @@
 
 import type { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 
-import type { EmbeddingAdapter } from "../types";
+import type { EmbeddingAdapter, EmbeddingMode } from "../types";
 import { requireConfig, type EmbeddingConfig } from "../config";
 import { dimensionsFor } from "./dimensions";
 
@@ -33,7 +33,7 @@ export class BedrockEmbeddingAdapter implements EmbeddingAdapter {
     return this.client;
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], mode: EmbeddingMode = "document"): Promise<number[][]> {
     if (texts.length === 0) return [];
     const client = await this.getClient();
     const { InvokeModelCommand } = await import("@aws-sdk/client-bedrock-runtime");
@@ -52,7 +52,10 @@ export class BedrockEmbeddingAdapter implements EmbeddingAdapter {
     };
 
     if (this.isCohere) {
-      const payload = (await invoke({ texts, input_type: "search_document" })) as {
+      // Cohere-on-Bedrock is asymmetric: "search_query" for queries, "search_document"
+      // for indexed content. Titan (below) has no such distinction and ignores `mode`.
+      const inputType = mode === "query" ? "search_query" : "search_document";
+      const payload = (await invoke({ texts, input_type: inputType })) as {
         embeddings?: number[][];
       };
       return payload.embeddings ?? [];
@@ -67,8 +70,8 @@ export class BedrockEmbeddingAdapter implements EmbeddingAdapter {
     return out;
   }
 
-  async embedOne(text: string): Promise<number[]> {
-    const [vector] = await this.embed([text]);
+  async embedOne(text: string, mode: EmbeddingMode = "document"): Promise<number[]> {
+    const [vector] = await this.embed([text], mode);
     return vector ?? [];
   }
 }

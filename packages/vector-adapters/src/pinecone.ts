@@ -74,6 +74,17 @@ interface PineconeIndexLike {
     records?: Record<string, PineconeRecordLike>;
   }>;
   deleteMany(options: { ids: string[] }): Promise<void>;
+  /**
+   * List record ids in this namespace, optionally filtered by id `prefix` and paged
+   * via an opaque `paginationToken`. Serverless-only: pod-based indexes do not expose
+   * this, so it may be absent at runtime even though the type declares it — callers
+   * must guard for that (see {@link PineconeAdapter.deleteBySource}).
+   */
+  listPaginated(options: {
+    prefix?: string;
+    paginationToken?: string;
+    limit?: number;
+  }): Promise<{ vectors?: { id: string }[]; pagination?: { next?: string } }>;
 }
 
 interface PineconeClientLike {
@@ -83,6 +94,12 @@ interface PineconeClientLike {
 interface PineconeModule {
   Pinecone: new (options: { apiKey: string }) => PineconeClientLike;
 }
+
+/**
+ * Pinecone caps `deleteMany({ ids })` at 1000 ids per call, so a source that
+ * produced more chunks than that is cleared in chunks of this size.
+ */
+const DELETE_BATCH_SIZE = 1000;
 
 /** Clamp a similarity score into the documented [0, 1] range. */
 function clampScore(score: number | undefined): number {
@@ -232,6 +249,54 @@ export class PineconeAdapter implements VectorAdapter {
     if (ids.length === 0) return;
     const index = await this.getIndex();
     await index.deleteMany({ ids });
+  }
+
+  /**
+   * Delete every chunk in this namespace that came from `sourceFile`. Called before
+   * re-ingesting a source so stale chunks (e.g. trailing chunks of a now-shorter doc)
+   * don't linger and get retrieved. Idempotent: deleting an absent source is a no-op.
+   *
+   * Why id-prefix listing instead of a metadata-filtered delete: serverless Pinecone
+   * does NOT support `deleteMany` with a metadata `filter`. We instead exploit the
+   * deterministic id scheme — `${rawNamespace}::${sourceFile}::${page}::${chunkIndex}`
+   * — and delete by id prefix. `this.ns` is the RAW namespace used to build those ids
+   * (only the *native* Pinecone namespace selection sanitises it), so the prefix is
+   * `${this.ns}::${sourceFile}::`. We page through `listPaginated` collecting every
+   * matching id, then `deleteMany` them in batches of {@link DELETE_BATCH_SIZE}.
+   *
+   * `listPaginated` is serverless-only. On a pod-based index it is absent at runtime;
+   * we catch that and throw a clear, CONFIG-pointing error telling the operator to use
+   * a metadata filter there. When nothing matches we skip `deleteMany` entirely.
+   */
+  async deleteBySource(sourceFile: string): Promise<void> {
+    const index = await this.getIndex();
+    const prefix = `${this.ns}::${sourceFile}::`;
+
+    if (typeof index.listPaginated !== "function") {
+      throw new Error(
+        "Pinecone deleteBySource requires listPaginated, which is only available on " +
+          "serverless indexes. Pod-based indexes must delete stale chunks with a " +
+          "metadata filter instead. See CONFIG.md#vector-store.",
+      );
+    }
+
+    const ids: string[] = [];
+    let paginationToken: string | undefined;
+    do {
+      const page = await index.listPaginated({ prefix, paginationToken });
+      for (const vector of page.vectors ?? []) {
+        ids.push(vector.id);
+      }
+      paginationToken = page.pagination?.next;
+    } while (paginationToken !== undefined && paginationToken !== "");
+
+    // Nothing to remove — re-ingesting a brand-new source hits this path. Skip the
+    // (cap-limited) deleteMany call entirely rather than sending an empty batch.
+    if (ids.length === 0) return;
+
+    for (let start = 0; start < ids.length; start += DELETE_BATCH_SIZE) {
+      await index.deleteMany({ ids: ids.slice(start, start + DELETE_BATCH_SIZE) });
+    }
   }
 
   /**

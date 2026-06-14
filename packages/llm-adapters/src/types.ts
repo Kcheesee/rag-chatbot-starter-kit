@@ -63,6 +63,17 @@ export interface LLMAdapter {
 }
 
 /**
+ * Whether text is being embedded for STORAGE ("document") or for SEARCH ("query").
+ *
+ * Asymmetric-embedding models (Cohere, Voyage, Vertex, Cohere-on-Bedrock) encode the
+ * two differently — a document and the query that should retrieve it are pushed
+ * closer together. Using the wrong mode (e.g. embedding a query as a document)
+ * silently degrades recall. Providers without the distinction (OpenAI, Titan) ignore
+ * it. Defaults to "document" so existing batch-ingest calls are unaffected.
+ */
+export type EmbeddingMode = "document" | "query";
+
+/**
  * The contract every embedding provider implements.
  *
  * Embeddings are deliberately a separate interface from chat: a deployment can run
@@ -70,10 +81,10 @@ export interface LLMAdapter {
  * model. `dimensions` is exposed so the vector store can validate index shape.
  */
 export interface EmbeddingAdapter {
-  /** Embed a batch of texts. Used by ingestion to embed many chunks at once. */
-  embed(texts: string[]): Promise<number[][]>;
-  /** Embed a single text. Used by the pipeline to embed an incoming query. */
-  embedOne(text: string): Promise<number[]>;
+  /** Embed a batch of texts. Used by ingestion to embed many chunks at once (mode "document"). */
+  embed(texts: string[], mode?: EmbeddingMode): Promise<number[][]>;
+  /** Embed a single text. Used by the pipeline to embed an incoming query (pass "query"). */
+  embedOne(text: string, mode?: EmbeddingMode): Promise<number[]>;
   /** Provider identifier, e.g. `"openai"`, `"bedrock"`. */
   readonly provider: string;
   /** Resolved embedding model identifier. */

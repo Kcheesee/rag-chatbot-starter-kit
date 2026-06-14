@@ -6,6 +6,8 @@
  * and `createVectorAdapter(env)` "just works".
  */
 
+import { createHash } from "node:crypto";
+
 /** Supported vector stores. */
 export type VectorStore = "chroma" | "pinecone" | "pgvector" | "weaviate";
 
@@ -60,8 +62,17 @@ export function requireConfig<T>(value: T | undefined, varName: string, hint: st
  * Sanitise a namespace into a token safe for use in collection / table / class
  * names across stores (alphanumeric + underscore). Multi-tenant isolation relies on
  * this being stable and collision-free for distinct namespaces.
+ *
+ * The naive `replace(/[^a-zA-Z0-9_]/g, "_")` is NOT injective: "acme-corp" and
+ * "acme_corp" both collapse to "acme_corp", which would silently merge two tenants'
+ * collections. So when sanitisation is lossy we append a short, stable hash of the
+ * ORIGINAL namespace, guaranteeing distinct inputs map to distinct, safe names. The
+ * common case (already-safe names like "default" or "acme") is returned unchanged.
  */
 export function sanitizeNamespace(ns: string): string {
   const cleaned = ns.replace(/[^a-zA-Z0-9_]/g, "_");
-  return cleaned.length > 0 ? cleaned : DEFAULT_NAMESPACE;
+  if (cleaned.length === 0) return DEFAULT_NAMESPACE;
+  if (cleaned === ns) return cleaned;
+  const suffix = createHash("sha256").update(ns).digest("hex").slice(0, 8);
+  return `${cleaned}_${suffix}`;
 }

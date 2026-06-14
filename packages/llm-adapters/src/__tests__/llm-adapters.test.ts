@@ -157,6 +157,27 @@ describe("embedding adapters (mocked HTTP)", () => {
     expect(vectors).toEqual([[0.1, 0.2], [0.3, 0.4]]);
   });
 
+  it("Cohere sends search_document for indexing and search_query for queries", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ embeddings: { float: [[0.1]] } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new CohereEmbeddingAdapter({
+      EMBEDDING_PROVIDER: "cohere",
+      EMBEDDING_MODEL: "embed-english-v3.0",
+      COHERE_API_KEY: "k",
+    });
+
+    await adapter.embed(["doc"]); // default → document
+    await adapter.embedOne("the question", "query");
+
+    const bodyOf = (call: number): { input_type?: string } =>
+      JSON.parse((fetchMock.mock.calls[call]![1] as { body: string }).body);
+    expect(bodyOf(0).input_type).toBe("search_document");
+    expect(bodyOf(1).input_type).toBe("search_query");
+  });
+
   it("VoyageEmbeddingAdapter sorts by index and throws on HTTP error", async () => {
     vi.stubGlobal(
       "fetch",
