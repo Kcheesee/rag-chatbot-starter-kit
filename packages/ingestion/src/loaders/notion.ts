@@ -178,12 +178,12 @@ export class NotionLoader implements DocumentLoader {
     }
 
     const client = new mod.Client({ auth: this.opts.token });
-    const pageIds = await this.resolvePageIds(client);
+    const pages = await this.resolvePageIds(client);
 
     const documents: RAGDocument[] = [];
-    for (const pageId of pageIds) {
+    for (const page of pages) {
       try {
-        documents.push(await this.loadPage(client, pageId));
+        documents.push(await this.loadPage(client, page.id, page.title));
       } catch {
         // Skip pages we can't read (archived, revoked share, transient error):
         // one bad page must not abort the whole ingest run.
@@ -202,26 +202,33 @@ export class NotionLoader implements DocumentLoader {
    * the id itself as a single page id. We can't pre-detect the kind cheaply, so we
    * let the database attempt be the probe.
    */
-  private async resolvePageIds(client: NotionClientLike): Promise<string[]> {
+  private async resolvePageIds(
+    client: NotionClientLike,
+  ): Promise<Array<{ id: string; title?: string }>> {
     try {
-      const pageIds: string[] = [];
+      const pages: Array<{ id: string; title?: string }> = [];
       let cursor: string | undefined;
       do {
         const response = await client.databases.query({
           database_id: this.opts.pageOrDatabaseId,
           ...(cursor !== undefined ? { start_cursor: cursor } : {}),
         });
-        for (const page of response.results) pageIds.push(page.id);
+        // Each database row carries its own title in a `title`-typed property — the
+        // correct, non-mis-attributed source for the document heading.
+        for (const page of response.results) {
+          pages.push(titleOf(page) ? { id: page.id, title: titleOf(page) } : { id: page.id });
+        }
         // `next_cursor` is non-null exactly when `has_more` is true; coalesce the
         // `null` terminal to `undefined` to drop `start_cursor` on the final call.
         cursor = response.has_more
           ? (response.next_cursor ?? undefined)
           : undefined;
       } while (cursor !== undefined);
-      return pageIds;
+      return pages;
     } catch {
       // Not a database (or not shared as one) — treat the id as a single page.
-      return [this.opts.pageOrDatabaseId];
+      // A standalone page's title isn't exposed via blocks, so heading stays absent.
+      return [{ id: this.opts.pageOrDatabaseId }];
     }
   }
 
@@ -229,16 +236,16 @@ export class NotionLoader implements DocumentLoader {
   private async loadPage(
     client: NotionClientLike,
     pageId: string,
+    title: string | undefined,
   ): Promise<RAGDocument> {
     const content = await this.collectBlockText(client, pageId, 0);
-    const heading = await this.fetchPageTitle(client, pageId);
 
     const metadata: DocumentMetadata = {
       sourceFile: `notion:${pageId}`,
       sourceType: "notion",
-      // Only attach `heading` when we actually found a non-empty title, so the
-      // optional metadata field stays absent rather than an empty string.
-      ...(heading ? { heading } : {}),
+      // Attach `heading` only when the database row carried a non-empty title, so
+      // the optional metadata field stays absent rather than an empty string.
+      ...(title ? { heading: title } : {}),
     };
     return { content, metadata };
   }
@@ -288,37 +295,27 @@ export class NotionLoader implements DocumentLoader {
     return lines.join("\n");
   }
 
-  /**
-   * Best-effort page title, used as the document `heading`.
-   *
-   * The title lives on the page's `title`-typed property, which only databases
-   * expose via the row objects from `databases.query`. The lightest portable way
-   * to recover a title for *any* page (database row or standalone) is the
-   * `child_page` block Notion synthesises as the first child of a page tree; we
-   * read its `rich_text`. Returns `undefined` when no title is discoverable —
-   * heading is optional, so its absence is fine.
-   */
-  private async fetchPageTitle(
-    client: NotionClientLike,
-    pageId: string,
-  ): Promise<string | undefined> {
-    try {
-      const response = await client.blocks.children.list({ block_id: pageId });
-      for (const block of response.results) {
-        if (block.type === "child_page") {
-          const data = block.child_page;
-          const title =
-            typeof data === "object" && data !== null && "title" in data
-              ? (data as { title?: unknown }).title
-              : undefined;
-          if (typeof title === "string" && title.length > 0) return title;
-        }
-      }
-    } catch {
-      // Title is optional; never let title lookup fail the page.
+}
+
+/**
+ * Extract a database row's title from its `title`-typed property.
+ *
+ * Notion exposes a row's title on whichever property has `type === "title"` (its
+ * name varies, e.g. "Name"). This is the correct heading source — unlike a page's
+ * child blocks, which only contain *sub-page* titles and would mis-attribute them.
+ * Returns undefined when no non-empty title is present.
+ */
+function titleOf(page: NotionPage): string | undefined {
+  for (const prop of Object.values(page.properties ?? {})) {
+    if (prop.type === "title" && prop.title && prop.title.length > 0) {
+      const text = prop.title
+        .map((span) => span.plain_text)
+        .join("")
+        .trim();
+      if (text.length > 0) return text;
     }
-    return undefined;
   }
+  return undefined;
 }
 
 /**

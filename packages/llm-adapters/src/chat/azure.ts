@@ -12,6 +12,21 @@ import type OpenAI from "openai";
 import { requireConfig, type LLMConfig } from "../config";
 import { OpenAICompatibleAdapter } from "./openai-base";
 
+/**
+ * True when `endpoint`'s host is an Azure Government host (`*.azure.us`).
+ *
+ * A host-suffix check, not a substring `includes(".azure.us")` — the latter would
+ * accept a spoofed `evil.azure.us.attacker.com`. Endpoints come from trusted
+ * operator config, but the federal assertion should still be exact.
+ */
+function isAzureGovEndpoint(endpoint: string): boolean {
+  try {
+    return new URL(endpoint).host.toLowerCase().endsWith(".azure.us");
+  } catch {
+    return false;
+  }
+}
+
 abstract class AbstractAzureAdapter extends OpenAICompatibleAdapter {
   protected readonly endpoint: string;
   protected readonly apiVersion: string;
@@ -37,7 +52,7 @@ abstract class AbstractAzureAdapter extends OpenAICompatibleAdapter {
 
   /** AAD scope differs between commercial and Government clouds. */
   protected get aadScope(): string {
-    return this.endpoint.includes(".azure.us")
+    return isAzureGovEndpoint(this.endpoint)
       ? "https://cognitiveservices.azure.us/.default"
       : "https://cognitiveservices.azure.com/.default";
   }
@@ -68,7 +83,7 @@ export class AzureGovAdapter extends AbstractAzureAdapter {
 
   constructor(cfg: LLMConfig) {
     super(cfg);
-    if (!this.endpoint.includes(".azure.us")) {
+    if (!isAzureGovEndpoint(this.endpoint)) {
       throw new Error(
         `LLM_PROVIDER="azure-gov" requires an Azure Government endpoint (*.openai.azure.us). ` +
           `Got: "${this.endpoint}". See CONFIG.md#federal-deployment.`,

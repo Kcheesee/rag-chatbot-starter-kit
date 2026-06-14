@@ -108,16 +108,16 @@ describe("createLLMAdapter", () => {
     ).toBe("bedrock-gov");
   });
 
-  it("enforces a .azure.us endpoint for azure-gov", () => {
-    expect(() =>
-      createLLMAdapter(
-        llm({
-          LLM_PROVIDER: "azure-gov",
-          AZURE_OPENAI_ENDPOINT: "https://x.openai.azure.com",
-          AZURE_OPENAI_DEPLOYMENT: "gpt-4o",
-        }),
-      ),
-    ).toThrow(/azure\.us/i);
+  it("enforces a .azure.us host for azure-gov (and rejects spoofed hosts)", () => {
+    const gov = (endpoint: string) =>
+      llm({ LLM_PROVIDER: "azure-gov", AZURE_OPENAI_ENDPOINT: endpoint, AZURE_OPENAI_DEPLOYMENT: "gpt-4o" });
+
+    // Commercial endpoint rejected.
+    expect(() => createLLMAdapter(gov("https://x.openai.azure.com"))).toThrow(/azure\.us/i);
+    // Substring-spoofed host rejected (host suffix check, not includes()).
+    expect(() => createLLMAdapter(gov("https://evil.azure.us.attacker.com"))).toThrow(/azure\.us/i);
+    // Genuine Government endpoint accepted.
+    expect(createLLMAdapter(gov("https://x.openai.azure.us")).provider).toBe("azure-gov");
   });
 });
 

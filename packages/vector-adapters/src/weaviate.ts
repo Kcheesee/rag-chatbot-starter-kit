@@ -297,7 +297,10 @@ export class WeaviateAdapter implements VectorAdapter {
       // Cosine distance is in [0, 2]; cosine similarity = 1 - distance lands in [0, 1]
       // for normalised embeddings, matching the SearchResult.score contract.
       const distance = obj.metadata?.distance ?? 1;
-      const score = 1 - distance;
+      // Cosine distance is [0, 2], so 1 - distance can be negative for near-opposite
+      // vectors; clamp to the [0, 1] similarity our contract (and the confidence
+      // gate) promises.
+      const score = Math.max(0, Math.min(1, 1 - distance));
       const props = obj.properties;
       return toSearchResult(String(props["chunkId"] ?? ""), String(props["content"] ?? ""), props, score);
     });
@@ -319,8 +322,12 @@ export class WeaviateAdapter implements VectorAdapter {
       })),
     );
 
-    // insertMany replaces existing objects addressed by the same (derived) UUID,
-    // giving us idempotent upsert keyed on the original chunk id.
+    // Weaviate's insertMany does NOT replace an object that already exists at the
+    // same UUID — it errors/skips it. For idempotent upsert (re-ingesting a changed
+    // chunk must refresh its content + contentHash, or the cache grounding check
+    // would never see the change), delete any existing objects by their derived
+    // UUID first, then insert. deleteById on a missing id is a no-op we ignore.
+    await Promise.all(objects.map((o) => collection.data.deleteById(o.id).catch(() => undefined)));
     await collection.data.insertMany(objects);
   }
 

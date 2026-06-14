@@ -290,8 +290,10 @@ export class PgVectorAdapter implements VectorAdapter {
 
     const res = await pool.query<VectorRow & { score: number | string }>(sql, params);
     // jsonb comes back already parsed into a JS object, so metadata needs no JSON.parse.
+    // Cosine distance is [0, 2]; clamp 1 - distance into the [0, 1] similarity our
+    // contract promises (near-opposite vectors would otherwise score below 0).
     return res.rows.map((row) =>
-      toSearchResult(row.id, row.content, row.metadata, Number(row.score)),
+      toSearchResult(row.id, row.content, row.metadata, Math.max(0, Math.min(1, Number(row.score)))),
     );
   }
 

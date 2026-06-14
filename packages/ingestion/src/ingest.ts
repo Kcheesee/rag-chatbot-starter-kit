@@ -85,10 +85,18 @@ export async function ingest(
     for (let i = 0; i < allChunks.length; i += batchSize) {
       const batch = allChunks.slice(i, i + batchSize);
       const vectors = await deps.embedder.embed(batch.map((c) => c.text));
+      // Fail loudly on a provider/batch misalignment rather than silently storing an
+      // empty embedding, which would corrupt retrieval for the affected chunks.
+      if (vectors.length !== batch.length) {
+        throw new Error(
+          `Embedding provider returned ${vectors.length} vectors for ${batch.length} ` +
+            `chunks (namespace "${namespace}"). Aborting to avoid corrupt embeddings.`,
+        );
+      }
       const embedded: EmbeddedChunk[] = batch.map((chunk, j) => ({
         id: chunk.id,
         text: chunk.text,
-        embedding: vectors[j] ?? [],
+        embedding: vectors[j],
         metadata: chunk.metadata,
         contentHash: chunk.contentHash,
       }));

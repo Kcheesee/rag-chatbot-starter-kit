@@ -232,7 +232,9 @@ export class ChromaAdapter implements VectorAdapter {
       const metadata = metadatas[i];
       const distance = distances[i];
       if (document == null || metadata == null || distance == null) continue;
-      results.push(toSearchResult(ids[i], document, metadata, 1 - distance));
+      // Cosine distance is [0, 2]; clamp 1 - distance into the [0, 1] similarity our
+      // contract promises so the retrieval-confidence gate sees a sane score.
+      results.push(toSearchResult(ids[i], document, metadata, Math.max(0, Math.min(1, 1 - distance))));
     }
     return results;
   }
