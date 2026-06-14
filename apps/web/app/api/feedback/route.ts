@@ -7,7 +7,7 @@
  * context alongside it so negative feedback is actionable.
  */
 
-import { authenticate } from "@/lib/auth";
+import { authenticate, authorizeNamespace } from "@/lib/auth";
 import { getEnv } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
@@ -35,7 +35,7 @@ function parseBody(body: unknown): FeedbackBody | null {
 
 export async function POST(req: Request): Promise<Response> {
   const env = getEnv();
-  const auth = authenticate(req, env);
+  const auth = await authenticate(req, env);
   if (!auth.ok) {
     return Response.json({ error: auth.message }, { status: auth.status ?? 401 });
   }
@@ -51,6 +51,14 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json(
       { error: "Body must include sessionId, messageId, and value ('up' | 'down')." },
       { status: 400 },
+    );
+  }
+
+  // If feedback is scoped to a namespace, the caller must be authorized for it.
+  if (body.namespace !== undefined && !authorizeNamespace(auth, body.namespace)) {
+    return Response.json(
+      { error: "You are not authorized for the requested namespace." },
+      { status: 403 },
     );
   }
 

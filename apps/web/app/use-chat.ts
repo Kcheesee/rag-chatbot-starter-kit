@@ -49,7 +49,29 @@ export interface UseChat {
   feedback: (messageId: string, value: FeedbackValue) => void;
 }
 
-export function useChat(namespace: string): UseChat {
+export interface UseChatOptions {
+  /**
+   * Returns the bearer token to send as `Authorization` (when AUTH is enabled).
+   * Defaults to reading `sessionStorage["rag_auth_token"]` — the documented seam a
+   * host page populates after its own login. Override to source the token from your
+   * auth provider's client SDK (e.g. Clerk's `getToken`). Returning null/undefined
+   * sends no header (correct for the default AUTH_ENABLED=false demo).
+   */
+  getAuthToken?: () => string | null | undefined;
+}
+
+/** Default token source: a session-scoped value a host page can set after login. */
+function defaultAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem("rag_auth_token");
+  } catch {
+    return null;
+  }
+}
+
+export function useChat(namespace: string, options: UseChatOptions = {}): UseChat {
+  const getAuthToken = options.getAuthToken ?? defaultAuthToken;
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [busy, setBusy] = useState(false);
   const [feedbackById, setFeedbackById] = useState<Record<string, FeedbackValue>>({});
@@ -73,9 +95,13 @@ export function useChat(namespace: string): UseChat {
       let answer = "";
       let citations: CitationView[] = [];
       try {
+        const token = getAuthToken();
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ query: text, sessionId: sessionId.current, namespace }),
         });
         if (!res.ok || !res.body) throw new Error(`Request failed (${res.status}).`);
@@ -105,19 +131,23 @@ export function useChat(namespace: string): UseChat {
         setBusy(false);
       }
     },
-    [namespace],
+    [namespace, getAuthToken],
   );
 
   const feedback = useCallback(
     (messageId: string, value: FeedbackValue): void => {
       setFeedbackById((prev) => ({ ...prev, [messageId]: value }));
+      const token = getAuthToken();
       void fetch("/api/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ sessionId: sessionId.current, messageId, value, namespace }),
       }).catch(() => undefined);
     },
-    [namespace],
+    [namespace, getAuthToken],
   );
 
   return { messages, busy, feedbackById, send, feedback };

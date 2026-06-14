@@ -27,6 +27,14 @@ export {
   type LoaderCredentials,
 } from "./loaders/registry";
 
+// Loader hardening: SSRF + arbitrary-file-read guards and their shared policy type.
+export {
+  type LoaderSecurity,
+  assertUrlAllowed,
+  guardedFetch,
+  assertPathAllowed,
+} from "./loaders/security";
+
 // Individual loaders, for direct use / extension.
 export { PdfLoader } from "./loaders/pdf";
 export { MarkdownLoader } from "./loaders/markdown";

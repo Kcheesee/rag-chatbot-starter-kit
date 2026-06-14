@@ -2,12 +2,14 @@
  * POST /api/ingest — document ingestion (admin-gated).
  *
  * Ingest is a privileged operation: someone who can add documents can poison the
- * knowledge base. It's gated behind `authenticate` (so it's protected whenever AUTH
- * is enabled). With AUTH disabled it's open for local dev — protect it before going
- * to production (enable AUTH, or front it with your platform's admin auth).
+ * knowledge base, and the source path/URL is attacker-influenced (SSRF / file read).
+ * So this route (a) requires an ADMIN identity — not merely an authenticated one —
+ * and (b) authorizes the target namespace, while the loader layer enforces path
+ * containment and URL/network restrictions (see lib/ingest.ts). With AUTH disabled
+ * it's open for local dev; protect it before production by enabling AUTH.
  */
 
-import { authenticate } from "@/lib/auth";
+import { authenticate, authorizeNamespace, requireAdmin } from "@/lib/auth";
 import { getEnv } from "@/lib/pipeline";
 import { runIngest, type IngestRequest } from "@/lib/ingest";
 import type { LoaderSourceType } from "@rag-chat-agent/ingestion";
@@ -43,9 +45,12 @@ function parseBody(body: unknown): IngestRequest | null {
 
 export async function POST(req: Request): Promise<Response> {
   const env = getEnv();
-  const auth = authenticate(req, env);
+  const auth = await authenticate(req, env);
   if (!auth.ok) {
     return Response.json({ error: auth.message }, { status: auth.status ?? 401 });
+  }
+  if (!requireAdmin(auth)) {
+    return Response.json({ error: "Ingestion requires an admin identity." }, { status: 403 });
   }
 
   let raw: unknown;
@@ -63,6 +68,12 @@ export async function POST(req: Request): Promise<Response> {
           `(array of: ${VALID_TYPES.join(", ")}).`,
       },
       { status: 400 },
+    );
+  }
+  if (!authorizeNamespace(auth, body.namespace)) {
+    return Response.json(
+      { error: "You are not authorized to ingest into the requested namespace." },
+      { status: 403 },
     );
   }
 

@@ -52,8 +52,14 @@ export interface RAGResponse {
   confidence: number;
   /** True when served from the response cache. */
   fromCache: boolean;
-  /** True when the query hit the fallback and should be handed to a human. */
+  /** True when the answer should be handed to a human (low confidence, ungrounded, or unfaithful). */
   escalate: boolean;
+  /**
+   * Machine-readable reason for `escalate` — e.g. "low_retrieval_confidence",
+   * "no_grounded_citations", "faithfulness_below_threshold", "faithfulness_unparseable".
+   * Lets a regulated surface decide whether to suppress, badge, or route the answer.
+   */
+  escalateReason?: string;
   /** End-to-end latency, in milliseconds. */
   latencyMs?: number;
   /** Model that produced the answer (absent on cache hits / fallbacks). */

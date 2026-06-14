@@ -6,7 +6,7 @@
  * (token / sources / done / error) — simple to parse on the client and proxy-safe.
  */
 
-import { authenticate } from "@/lib/auth";
+import { authenticate, authorizeNamespace } from "@/lib/auth";
 import { clientIp } from "@/lib/http";
 import { rateLimit } from "@/lib/rate-limit";
 import { getEnv, getPipeline } from "@/lib/pipeline";
@@ -33,7 +33,7 @@ function parseBody(body: unknown): ChatBody | null {
 export async function POST(req: Request): Promise<Response> {
   const env = getEnv();
 
-  const auth = authenticate(req, env);
+  const auth = await authenticate(req, env);
   if (!auth.ok) {
     return Response.json({ error: auth.message }, { status: auth.status ?? 401 });
   }
@@ -54,6 +54,14 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json(
       { error: "Body must include a non-empty query, a sessionId, and a namespace." },
       { status: 400 },
+    );
+  }
+
+  // Tenant isolation: a caller may only query namespaces their identity permits.
+  if (!authorizeNamespace(auth, body.namespace)) {
+    return Response.json(
+      { error: "You are not authorized for the requested namespace." },
+      { status: 403 },
     );
   }
 

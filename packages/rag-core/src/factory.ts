@@ -41,6 +41,7 @@ export function createPipeline(env: Env): RAGPipeline {
       minConfidence: env.MIN_RETRIEVAL_CONFIDENCE,
       maxContextTokens: env.MAX_CONTEXT_TOKENS,
       queryRewrite: env.QUERY_REWRITE,
+      strictGrounding: env.STRICT_GROUNDING,
       faithfulnessCheck: env.FAITHFULNESS_CHECK,
       faithfulnessThreshold: env.FAITHFULNESS_THRESHOLD,
       cacheEnabled: env.CACHE_ENABLED,

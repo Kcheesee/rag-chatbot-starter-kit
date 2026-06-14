@@ -20,6 +20,7 @@ import { UrlLoader } from "./url";
 import { SitemapLoader } from "./sitemap";
 import { NotionLoader } from "./notion";
 import { ConfluenceLoader } from "./confluence";
+import { assertPathAllowed, type LoaderSecurity } from "./security";
 
 /** Every source type the ingest CLI accepts. */
 export type LoaderSourceType =
@@ -79,17 +80,24 @@ async function walkDir(dir: string): Promise<string[]> {
   return out;
 }
 
-/** Build the loaders for a source + requested types. */
+/**
+ * Build the loaders for a source + requested types.
+ *
+ * @param sec - Optional security policy. For url/sitemap it is threaded into the loaders
+ *   (SSRF gate); for file types its `ingestRoot` confines every resolved path. Optional
+ *   and defaulted to `{}` so existing 3-arg callers keep compiling unchanged.
+ */
 export async function createLoaders(
   source: string,
   types: LoaderSourceType[],
   creds: LoaderCredentials = {},
+  sec: LoaderSecurity = {},
 ): Promise<DocumentLoader[]> {
   const requested = new Set(types);
 
   // Single-source, non-file types.
-  if (requested.has("url")) return [new UrlLoader(source)];
-  if (requested.has("sitemap")) return [new SitemapLoader(source)];
+  if (requested.has("url")) return [new UrlLoader(source, sec)];
+  if (requested.has("sitemap")) return [new SitemapLoader(source, undefined, sec)];
   if (requested.has("notion")) {
     if (!creds.notionToken) {
       throw new Error("Notion ingestion requires NOTION_TOKEN. See CONFIG.md#ingestion.");
@@ -112,13 +120,21 @@ export async function createLoaders(
     throw new Error(`No loader available for types: ${types.join(", ")}. See CONFIG.md#ingestion.`);
   }
 
-  const info = await stat(source);
-  const paths = info.isDirectory() ? await walkDir(source) : [source];
+  // Containment first: the `stat` target itself must be inside ingestRoot (when set),
+  // so a malicious `--source ../../etc` is rejected before we ever touch the filesystem
+  // tree. With no ingestRoot this is a passthrough that just normalizes to absolute.
+  const safeSource = assertPathAllowed(source, sec.ingestRoot);
+
+  const info = await stat(safeSource);
+  const paths = info.isDirectory() ? await walkDir(safeSource) : [safeSource];
   const loaders: DocumentLoader[] = [];
   for (const path of paths) {
     const type = EXT_TO_TYPE[extname(path).toLowerCase()];
     if (type && requested.has(type)) {
-      const loader = fileLoaderFor(type, path);
+      // Re-check EACH file: walkDir can surface symlinks pointing outside the root, so
+      // every individual path is re-validated (and we use the returned real path).
+      const safePath = assertPathAllowed(path, sec.ingestRoot);
+      const loader = fileLoaderFor(type, safePath);
       if (loader) loaders.push(loader);
     }
   }

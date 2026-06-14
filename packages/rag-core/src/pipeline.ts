@@ -63,6 +63,12 @@ export interface PipelineConfig {
   minConfidence: number;
   maxContextTokens: number;
   queryRewrite: boolean;
+  /**
+   * When true, a generated answer with zero valid citations is escalated rather than
+   * served as authoritative. Pair with FAITHFULNESS_CHECK for high-stakes / regulated
+   * deployments where an ungrounded answer is worse than no answer.
+   */
+  strictGrounding: boolean;
   faithfulnessCheck: boolean;
   faithfulnessThreshold: number;
   cacheEnabled: boolean;
@@ -162,12 +168,32 @@ export class RAGPipelineImpl implements RAGPipeline {
       const cited = new Set(extractCitedIndices(answer));
       const sources = citations.filter((c) => cited.has(c.index));
 
-      // 12. Faithfulness check (optional).
+      // Accuracy guardrails FAIL CLOSED: an answer with no grounded citation, or one
+      // the faithfulness check can't confirm, is escalated rather than served as
+      // authoritative. The streamed tokens already reached the client, so escalation
+      // is a signal the surface acts on (badge / route / suppress), not a silent pass.
       let escalate = false;
+      let escalateReason: string | undefined;
+      if (this.config.strictGrounding && sources.length === 0) {
+        escalate = true;
+        escalateReason = "no_grounded_citations";
+      }
+
+      // 12. Faithfulness check (optional). An UNPARSEABLE score escalates — it is never
+      // treated as "fully faithful" (the previous fail-open behaviour).
       let faithfulness: number | undefined;
       if (this.config.faithfulnessCheck) {
-        faithfulness = await this.scoreFaithfulness(answer, reranked);
-        if (faithfulness < this.config.faithfulnessThreshold) escalate = true;
+        const score = await this.scoreFaithfulness(answer, reranked);
+        if (score === null) {
+          escalate = true;
+          escalateReason ??= "faithfulness_unparseable";
+        } else {
+          faithfulness = score;
+          if (score < this.config.faithfulnessThreshold) {
+            escalate = true;
+            escalateReason ??= "faithfulness_below_threshold";
+          }
+        }
       }
 
       const response: RAGResponse = {
@@ -176,6 +202,7 @@ export class RAGPipelineImpl implements RAGPipeline {
         confidence,
         fromCache: false,
         escalate,
+        ...(escalateReason ? { escalateReason } : {}),
         latencyMs: Date.now() - started,
         model: this.config.model,
       };
@@ -316,8 +343,13 @@ export class RAGPipelineImpl implements RAGPipeline {
     };
   }
 
-  /** Score how well the answer is supported by the context (stage 12). */
-  private async scoreFaithfulness(answer: string, chunks: SearchResult[]): Promise<number> {
+  /**
+   * Score how well the answer is supported by the context (stage 12).
+   *
+   * Returns `null` when the model's reply can't be parsed into a number — the caller
+   * treats that as "could not confirm" and escalates, rather than assuming faithful.
+   */
+  private async scoreFaithfulness(answer: string, chunks: SearchResult[]): Promise<number | null> {
     const res = await this.deps.llm.chat(
       [
         {
@@ -331,7 +363,8 @@ export class RAGPipelineImpl implements RAGPipeline {
       { maxTokens: 8, temperature: 0 },
     );
     const score = Number.parseFloat(res.content.trim());
-    return Number.isFinite(score) ? Math.max(0, Math.min(1, score)) : 1;
+    // Unparseable → null ("could not confirm"), never 1. The caller escalates.
+    return Number.isFinite(score) ? Math.max(0, Math.min(1, score)) : null;
   }
 
   private async appendTurns(sessionId: string, query: string, answer: string): Promise<void> {

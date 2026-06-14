@@ -15,6 +15,8 @@
 
 import type { DocumentLoader, RAGDocument, DocumentMetadata } from "@rag-chat-agent/rag-core";
 
+import { guardedFetch, type LoaderSecurity } from "./security";
+
 /**
  * Minimal structural view of the slice of cheerio's API we use.
  *
@@ -59,25 +61,21 @@ function normalizeWhitespace(raw: string): string {
  *
  * Shared by {@link UrlLoader} and the sitemap loader so both extract text identically.
  *
- * @throws if the fetch fails or the server responds with a non-2xx status.
+ * The fetch is routed through {@link guardedFetch}, which applies the SSRF gauntlet
+ * (scheme/allowlist/private-IP gate, per-redirect re-validation, size + timeout caps)
+ * defined by `sec`. Defaults to `{}` (safe deny-by-default policy) so existing callers
+ * that pass no policy are hardened automatically without changing their call sites.
+ *
+ * @param url - The page URL to fetch.
+ * @param sec - Optional security policy; see {@link LoaderSecurity}.
+ * @throws if the URL is disallowed, the fetch fails, or the server responds non-2xx.
  */
-export async function fetchPageText(url: string): Promise<{ text: string; title?: string }> {
-  // Global `fetch` is available on Node 20+ (the repo's runtime floor), so no polyfill.
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`Failed to fetch "${url}": ${reason}. See CONFIG.md#ingestion.`);
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      `Failed to fetch "${url}": HTTP ${res.status} ${res.statusText}. See CONFIG.md#ingestion.`,
-    );
-  }
-
-  const html = await res.text();
+export async function fetchPageText(
+  url: string,
+  sec: LoaderSecurity = {},
+): Promise<{ text: string; title?: string }> {
+  // All transport-level hardening lives in guardedFetch; here we only extract text.
+  const { body: html } = await guardedFetch(url, sec);
 
   // Lazy, structurally-typed import: keeps cheerio out of the typecheck dependency set.
   const { load } = (await import("cheerio")) as unknown as CheerioModule;
@@ -108,10 +106,17 @@ export async function fetchPageText(url: string): Promise<{ text: string; title?
 export class UrlLoader implements DocumentLoader {
   readonly sourceType = "url";
 
-  constructor(private readonly url: string) {}
+  /**
+   * @param url - The page to load.
+   * @param sec - Optional security policy threaded down to {@link fetchPageText}.
+   */
+  constructor(
+    private readonly url: string,
+    private readonly sec: LoaderSecurity = {},
+  ) {}
 
   async load(): Promise<RAGDocument[]> {
-    const { text, title } = await fetchPageText(this.url);
+    const { text, title } = await fetchPageText(this.url, this.sec);
 
     const metadata: DocumentMetadata = {
       sourceFile: this.url,

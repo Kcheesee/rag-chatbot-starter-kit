@@ -22,6 +22,7 @@ import type {
 // fetch+extract helper keeps page-text behaviour (HTML stripping, title
 // extraction, redirects) identical across both loaders.
 import { fetchPageText } from "./url";
+import { guardedFetch, type LoaderSecurity } from "./security";
 
 /**
  * Minimal structural shape of the slice of cheerio we touch.
@@ -64,20 +65,20 @@ export class SitemapLoader implements DocumentLoader {
    * @param sitemapUrl - Absolute URL of the `sitemap.xml` to read.
    * @param maxUrls - Hard cap on pages crawled. Default 100; see class JSDoc for
    *   why this exists and why it is explicit.
+   * @param sec - Optional security policy applied to BOTH the sitemap.xml fetch and
+   *   every per-page fetch; see {@link LoaderSecurity}.
    */
   public constructor(
     private readonly sitemapUrl: string,
     private readonly maxUrls: number = 100,
+    private readonly sec: LoaderSecurity = {},
   ) {}
 
   public async load(): Promise<RAGDocument[]> {
-    const response = await fetch(this.sitemapUrl);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch sitemap ${this.sitemapUrl}: ${response.status} ${response.statusText}. See CONFIG.md#ingestion.`,
-      );
-    }
-    const xml = await response.text();
+    // WHY guardedFetch here too: the sitemap.xml fetch is itself an SSRF sink — an
+    // operator-supplied sitemap URL could point at an internal endpoint just as a
+    // page URL could. Route it through the same gate as the pages it lists.
+    const { body: xml } = await guardedFetch(this.sitemapUrl, this.sec);
 
     // WHY lazy dynamic import: cheerio is heavyweight and only needed when a
     // sitemap is actually crawled. Importing it at call time keeps it off the
@@ -107,7 +108,7 @@ export class SitemapLoader implements DocumentLoader {
     const documents: RAGDocument[] = [];
     for (const url of capped) {
       try {
-        const { text, title } = await fetchPageText(url);
+        const { text, title } = await fetchPageText(url, this.sec);
         documents.push({
           content: text,
           metadata: {

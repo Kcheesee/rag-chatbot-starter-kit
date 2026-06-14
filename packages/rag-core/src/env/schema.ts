@@ -103,6 +103,9 @@ export const EnvSchema = z
 
     // ── Accuracy guardrails ──
     MIN_RETRIEVAL_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
+    // When true, an answer with no valid citation is escalated rather than served
+    // as authoritative. Recommended for regulated/high-stakes deployments.
+    STRICT_GROUNDING: zBool(false),
     FAITHFULNESS_CHECK: zBool(false),
     FAITHFULNESS_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
 
@@ -113,6 +116,27 @@ export const EnvSchema = z
     SAML_ENTRY_POINT: z.string().optional(),
     SAML_ISSUER: z.string().default("rag-chat-agent"),
     AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(50),
+    // Secure-by-default token verification (see CONFIG.md#auth). With AUTH_ENABLED
+    // and NONE of these configured, the API fails CLOSED (rejects every request)
+    // rather than trusting an unverified token.
+    //   AUTH_STATIC_TOKENS — JSON array of identities for the built-in verifier:
+    //     [{ "token": "...", "userId": "...", "admin": true, "namespaces": ["acme"] }]
+    //   AUTH_ALLOW_INSECURE_TOKENS — DEV ONLY. Treat any non-empty bearer token as an
+    //     opaque user id with no tenant scoping. Never enable in production/federal.
+    AUTH_STATIC_TOKENS: z.string().optional(),
+    AUTH_ALLOW_INSECURE_TOKENS: zBool(false),
+    AUTH_DEFAULT_NAMESPACE: z.string().default("default"),
+
+    // ── Ingestion security (admin ingest API; see CONFIG.md#ingestion) ──
+    // INGEST_ROOT — if set, file ingestion is confined to this directory (path
+    //   containment + symlink-escape guard). Unset → local paths trusted (CLI use).
+    // INGEST_URL_ALLOWLIST — comma-separated host allowlist for url/sitemap loaders
+    //   (".example.com" matches subdomains). Unset → any public host permitted.
+    INGEST_ROOT: z.string().optional(),
+    INGEST_URL_ALLOWLIST: z.string().optional(),
+    INGEST_MAX_BYTES: z.coerce.number().int().positive().default(10_000_000),
+    INGEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+    INGEST_ALLOW_PRIVATE_NETWORKS: zBool(false),
 
     // ── Session ──
     SESSION_STORE: z.enum(["memory", "redis"]).default("memory"),
@@ -182,6 +206,14 @@ export const EnvSchema = z
           code: z.ZodIssueCode.custom,
           path: ["AUTH_ENABLED"],
           message: "DEPLOYMENT_MODE=federal requires AUTH_ENABLED=true.",
+        });
+      }
+      if (env.AUTH_ALLOW_INSECURE_TOKENS) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["AUTH_ALLOW_INSECURE_TOKENS"],
+          message:
+            "DEPLOYMENT_MODE=federal forbids AUTH_ALLOW_INSECURE_TOKENS=true — wire a real verifier.",
         });
       }
     }

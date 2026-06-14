@@ -16,8 +16,11 @@ import {
   createPIIRedactor,
   ingest,
   type IngestResult,
+  type LoaderSecurity,
   type LoaderSourceType,
 } from "@rag-chat-agent/ingestion";
+
+import type { Env } from "@rag-chat-agent/rag-core";
 
 import { getEnv } from "./pipeline";
 
@@ -26,6 +29,28 @@ export interface IngestRequest {
   types: LoaderSourceType[];
   namespace: string;
   dryRun?: boolean;
+}
+
+/**
+ * Build the loader security policy from validated env. This is what confines file
+ * ingestion to INGEST_ROOT and blocks SSRF (private networks / off-allowlist hosts)
+ * for the url/sitemap loaders. Defaults already block private networks; setting
+ * INGEST_ROOT / INGEST_URL_ALLOWLIST tightens it further.
+ */
+export function toLoaderSecurity(env: Env): LoaderSecurity {
+  return {
+    allowPrivateNetworks: env.INGEST_ALLOW_PRIVATE_NETWORKS,
+    maxBytes: env.INGEST_MAX_BYTES,
+    timeoutMs: env.INGEST_TIMEOUT_MS,
+    ...(env.INGEST_ROOT ? { ingestRoot: env.INGEST_ROOT } : {}),
+    ...(env.INGEST_URL_ALLOWLIST
+      ? {
+          urlAllowlist: env.INGEST_URL_ALLOWLIST.split(",")
+            .map((h) => h.trim())
+            .filter(Boolean),
+        }
+      : {}),
+  };
 }
 
 export async function runIngest(params: IngestRequest): Promise<IngestResult> {
@@ -40,7 +65,7 @@ export async function runIngest(params: IngestRequest): Promise<IngestResult> {
   });
   const audit = initAuditLogger(toAuditLoggerConfig(env));
 
-  const loaders = await createLoaders(params.source, params.types, {});
+  const loaders = await createLoaders(params.source, params.types, {}, toLoaderSecurity(env));
 
   return ingest(
     loaders,

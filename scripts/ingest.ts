@@ -20,6 +20,7 @@ import {
   createPIIRedactor,
   ingest,
   type LoaderCredentials,
+  type LoaderSecurity,
   type LoaderSourceType,
 } from "@rag-chat-agent/ingestion";
 
@@ -71,7 +72,23 @@ const redactor = createPIIRedactor({
   ...(env.AWS_REGION ? { AWS_REGION: env.AWS_REGION } : {}),
 });
 
-const loaders = await createLoaders(opts.source, types, creds);
+// Apply the same SSRF / path-containment policy as the web ingest route. Defaults
+// already block private networks; INGEST_ROOT / INGEST_URL_ALLOWLIST tighten further.
+const security: LoaderSecurity = {
+  allowPrivateNetworks: env.INGEST_ALLOW_PRIVATE_NETWORKS,
+  maxBytes: env.INGEST_MAX_BYTES,
+  timeoutMs: env.INGEST_TIMEOUT_MS,
+  ...(env.INGEST_ROOT ? { ingestRoot: env.INGEST_ROOT } : {}),
+  ...(env.INGEST_URL_ALLOWLIST
+    ? {
+        urlAllowlist: env.INGEST_URL_ALLOWLIST.split(",")
+          .map((h) => h.trim())
+          .filter(Boolean),
+      }
+    : {}),
+};
+
+const loaders = await createLoaders(opts.source, types, creds, security);
 const result = await ingest(
   loaders,
   {
