@@ -45,6 +45,7 @@ export function createPipeline(env: Env): RAGPipeline {
       faithfulnessCheck: env.FAITHFULNESS_CHECK,
       faithfulnessThreshold: env.FAITHFULNESS_THRESHOLD,
       cacheEnabled: env.CACHE_ENABLED,
+      cacheInvalidateOnModelChange: env.CACHE_INVALIDATE_ON_MODEL_CHANGE,
       logQueryHashes: env.LOG_QUERY_HASHES,
       environment: env.NODE_ENV,
       deploymentMode: env.DEPLOYMENT_MODE,

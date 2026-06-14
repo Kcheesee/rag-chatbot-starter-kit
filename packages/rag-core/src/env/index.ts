@@ -7,6 +7,11 @@
  * (the env-keyed adapter configs need no mapping — `Env` is assignable directly).
  */
 
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { config as loadDotenv } from "dotenv";
+
 import type { AuditLoggerConfig } from "@rag-chat-agent/audit-logger";
 
 import { EnvSchema, type Env } from "./schema";
@@ -14,6 +19,40 @@ import { EnvSchema, type Env } from "./schema";
 export { EnvSchema, type Env } from "./schema";
 
 let cached: Env | null = null;
+let envFilesLoaded = false;
+
+/**
+ * Load `.env.local` then `.env` from the monorepo ROOT into process.env (without
+ * overriding anything already set), once per process.
+ *
+ * WHY this exists: Next.js only auto-loads env files from the app directory
+ * (`apps/web/`), and the tsx CLIs (`npm run seed`/`ingest`) load none at all — so the
+ * documented "put your keys in a root `.env.local`" only works because we load it
+ * here. `loadEnv()` is the single entry point both the web server (via
+ * instrumentation) and the scripts go through, so this is the right seam.
+ */
+function loadRootEnvFiles(): void {
+  if (envFilesLoaded) return;
+  envFilesLoaded = true;
+
+  // Find the repo root by walking up for turbo.json (unique to the workspace root);
+  // fall back to cwd if not found (e.g. the package used standalone).
+  let dir = process.cwd();
+  let root = process.cwd();
+  for (;;) {
+    if (existsSync(join(dir, "turbo.json"))) {
+      root = dir;
+      break;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // `.env.local` wins over `.env`; neither overrides a variable already in the
+  // environment (real shell/secret-manager values take precedence over files).
+  loadDotenv({ path: [join(root, ".env.local"), join(root, ".env")], override: false });
+}
 
 /** Drop empty-string values so optionals fall back to their schema defaults. */
 function dropEmpty(source: Record<string, string | undefined>): Record<string, string> {
@@ -44,7 +83,10 @@ function parse(source: Record<string, string | undefined>): Env {
  */
 export function loadEnv(source?: Record<string, string | undefined>): Env {
   if (source) return parse(source);
-  if (!cached) cached = parse(process.env);
+  if (!cached) {
+    loadRootEnvFiles();
+    cached = parse(process.env);
+  }
   return cached;
 }
 

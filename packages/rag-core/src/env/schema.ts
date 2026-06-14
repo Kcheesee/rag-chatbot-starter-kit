@@ -185,6 +185,29 @@ export const EnvSchema = z
       });
     }
 
+    // Data residency: when enforced, every provider region the deployment uses must
+    // fall inside ALLOWED_REGIONS. Validated at startup so an out-of-boundary region
+    // fails fast rather than silently shipping data across a jurisdiction. Applies in
+    // standard mode too (residency isn't federal-only).
+    if (env.ENFORCE_DATA_RESIDENCY) {
+      const allowed = env.ALLOWED_REGIONS.split(",")
+        .map((r) => r.trim())
+        .filter(Boolean);
+      const checkRegion = (region: string | undefined, key: "AWS_REGION" | "VERTEX_LOCATION"): void => {
+        if (region && !allowed.includes(region)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message:
+              `${key}="${region}" is outside ALLOWED_REGIONS (${allowed.join(", ")}) but ` +
+              "ENFORCE_DATA_RESIDENCY=true. See CONFIG.md#federal-deployment.",
+          });
+        }
+      };
+      checkRegion(env.AWS_REGION, "AWS_REGION");
+      checkRegion(env.VERTEX_LOCATION, "VERTEX_LOCATION");
+    }
+
     // Federal invariants (the spec's required env validations).
     if (env.DEPLOYMENT_MODE === "federal") {
       if (env.VECTOR_STORE === "pinecone") {

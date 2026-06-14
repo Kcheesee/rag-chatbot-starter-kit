@@ -14,3 +14,29 @@ body {
   background: #f6f7f9;
   color: #1a1a1a;
 }
+
+/*
+ * Reduced motion. Honour the OS setting always, and force it app-wide when the
+ * deployment sets A11Y_MODE=true (layout puts `data-a11y-mode="true"` on <html>).
+ * This neutralises typing-indicator pulses, cursor blinks, and transitions for
+ * users who need a calm, motion-free interface — a concrete WCAG 2.3.3 benefit.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-a11y-mode="true"] *,
+[data-a11y-mode="true"] *::before,
+[data-a11y-mode="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

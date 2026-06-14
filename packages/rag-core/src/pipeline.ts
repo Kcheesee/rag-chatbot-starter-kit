@@ -72,6 +72,8 @@ export interface PipelineConfig {
   faithfulnessCheck: boolean;
   faithfulnessThreshold: number;
   cacheEnabled: boolean;
+  /** Drop a cache hit produced by a different model than the one now configured. */
+  cacheInvalidateOnModelChange: boolean;
   logQueryHashes: boolean;
   environment: string;
   deploymentMode: DeploymentMode;
@@ -126,13 +128,18 @@ export class RAGPipelineImpl implements RAGPipeline {
       if (this.config.cacheEnabled) {
         const hit = await this.deps.cache.get(embedding, input.namespace);
         if (hit) {
-          if (await validateCacheGrounding(hit, store)) {
+          // Don't serve an answer produced by a different model than the one now
+          // configured (CACHE_INVALIDATE_ON_MODEL_CHANGE) — a model swap can change
+          // wording, safety posture, or quality, so the old answer is stale.
+          const modelChanged =
+            this.config.cacheInvalidateOnModelChange && hit.model !== this.config.model;
+          if (!modelChanged && (await validateCacheGrounding(hit, store))) {
             this.logCache(input, started, "hit");
             yield* this.emitCached(input, started, query, hit);
             return;
           }
-          // Source content changed since caching — drop the stale entry.
-          this.logCache(input, started, "grounding_failed");
+          // Stale (model swapped, or source content changed) — drop the entry.
+          this.logCache(input, started, modelChanged ? "model_changed" : "grounding_failed");
           await this.deps.cache.invalidate(input.namespace);
         }
       }
@@ -401,7 +408,11 @@ export class RAGPipelineImpl implements RAGPipeline {
     });
   }
 
-  private logCache(input: QueryInput, started: number, action: "hit" | "grounding_failed"): void {
+  private logCache(
+    input: QueryInput,
+    started: number,
+    action: "hit" | "grounding_failed" | "model_changed",
+  ): void {
     this.deps.audit.logCacheEvent({
       timestamp: nowIso(),
       event_type: "cache",

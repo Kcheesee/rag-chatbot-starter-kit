@@ -20,9 +20,17 @@ export class InMemoryResponseCache implements ResponseCache {
   private readonly byNamespace = new Map<string, CacheEntry[]>();
   private counter = 0;
 
+  /**
+   * @param threshold        Minimum cosine similarity for a hit.
+   * @param ttlSeconds       Entry lifetime.
+   * @param maxPerNamespace  Hard cap on live entries per namespace (oldest evicted
+   *   first). Bounds memory so a high-cardinality query stream can't grow the cache
+   *   without limit — the Redis cache is the answer for real multi-instance scale.
+   */
   constructor(
     private readonly threshold: number,
     private readonly ttlSeconds: number,
+    private readonly maxPerNamespace = 1_000,
   ) {}
 
   async get(embedding: number[], namespace: string): Promise<CachedResponse | null> {
@@ -58,6 +66,10 @@ export class InMemoryResponseCache implements ResponseCache {
       response,
       expiresAt: Date.now() + (ttl ?? this.ttlSeconds) * 1000,
     });
+    // Bound memory: keep only the newest `maxPerNamespace` entries (FIFO eviction).
+    if (entries.length > this.maxPerNamespace) {
+      entries.splice(0, entries.length - this.maxPerNamespace);
+    }
     this.byNamespace.set(namespace, entries);
   }
 

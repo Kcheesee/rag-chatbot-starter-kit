@@ -118,6 +118,7 @@ function config(overrides: Partial<PipelineConfig> = {}): PipelineConfig {
     faithfulnessCheck: false,
     faithfulnessThreshold: 0.85,
     cacheEnabled: true,
+    cacheInvalidateOnModelChange: false,
     logQueryHashes: false,
     environment: "test",
     deploymentMode: "standard",
@@ -203,6 +204,36 @@ describe("session & cache stores", () => {
     const history = await store.getHistory("s");
     expect(history).toHaveLength(2);
     expect(history[0]!.content).toBe("q2");
+  });
+
+  it("InMemorySessionStore bounds the number of sessions (LRU eviction)", async () => {
+    const store = new InMemorySessionStore(10, 2); // keep at most 2 sessions
+    const t = (c: string): { role: "user"; content: string; timestamp: string } => ({
+      role: "user",
+      content: c,
+      timestamp: "t",
+    });
+    await store.append("s1", t("a"));
+    await store.append("s2", t("b"));
+    await store.append("s3", t("c")); // evicts s1, the least-recently-used
+    expect(await store.getHistory("s1")).toEqual([]);
+    expect(await store.getHistory("s3")).toHaveLength(1);
+  });
+
+  it("InMemoryResponseCache evicts the oldest entry beyond maxPerNamespace", async () => {
+    const cache = new InMemoryResponseCache(0.99, 3600, 2); // cap 2 per namespace
+    const entry = (answer: string): Parameters<typeof cache.set>[2] => ({
+      answer,
+      sources: [],
+      sourceChunks: [],
+      model: "m",
+      createdAt: "now",
+    });
+    await cache.set([1, 0, 0], "n", entry("a"));
+    await cache.set([0, 1, 0], "n", entry("b"));
+    await cache.set([0, 0, 1], "n", entry("c")); // pushes out "a"
+    expect(await cache.get([1, 0, 0], "n")).toBeNull(); // "a" was evicted
+    expect(await cache.get([0, 0, 1], "n")).toMatchObject({ answer: "c" });
   });
 
   it("InMemoryResponseCache returns a hit above threshold and null below", async () => {
@@ -328,6 +359,30 @@ describe("RAG pipeline", () => {
     expect(res.answer).toBe("Fresh answer [1].");
     expect(model.streamCalls).toBe(1);
     expect(audit.cache.length).toBeGreaterThanOrEqual(1); // grounding_failed logged
+  });
+
+  it("invalidates a cache hit when the model changed (CACHE_INVALIDATE_ON_MODEL_CHANGE)", async () => {
+    const cache = new InMemoryResponseCache(0.9, 3600);
+    await cache.set([1, 0, 0], "acme", {
+      answer: "answer from the old model",
+      sources: [],
+      sourceChunks: [{ chunkId: "c1", contentHash: "h1" }], // grounding WOULD pass
+      model: "old-model", // ...but the configured model is "mock-model"
+      createdAt: "now",
+    });
+    const byId: Record<string, StoredChunk> = {
+      c1: { id: "c1", text: "x", contentHash: "h1", metadata: chunk("c1", "x", 0).metadata },
+    };
+    const { p, model } = pipeline({
+      results: [chunk("c1", "fresh content", 0.95)],
+      tokens: ["Fresh answer [1]."],
+      byId,
+      cache,
+      cfg: { cacheInvalidateOnModelChange: true },
+    });
+    const res = await p.query(input);
+    expect(res.fromCache).toBe(false); // not served from the stale-model cache
+    expect(model.streamCalls).toBe(1); // re-generated with the current model
   });
 
   it("logs a security event on a suspected injection", async () => {

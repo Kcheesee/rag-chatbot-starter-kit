@@ -52,10 +52,6 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
-    # Reports vulnerabilities without blocking the pipeline out of the box. Triage
-    # findings and flip this to a hard gate (remove continue-on-error) for production
-    # — federal deployments should also run the agency-approved SAST/DAST tooling.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,4 +59,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # HARD GATE on critical production vulnerabilities — these fail the build.
+      - name: Fail on critical vulnerabilities (production deps)
+        run: npm audit --omit=dev --audit-level=critical
+      # Report (do not block on) high/moderate. Known residuals are tracked in
+      # MAINTENANCE.md#known-vulnerabilities: the Next.js DoS-class advisories are
+      # patched only in Next 15 / React 19 (a planned major upgrade), and the
+      # botframework chain pulls older uuid/msal/gaxios that only botbuilder can fix.
+      # Federal deployments must additionally run the agency-approved SAST/DAST.
+      - name: Report high/moderate vulnerabilities (non-blocking)
+        run: npm audit --omit=dev --audit-level=high || true

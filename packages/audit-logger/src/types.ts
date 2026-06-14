@@ -70,7 +70,7 @@ export interface IngestEvent extends BaseAuditEvent {
 export interface CacheEvent extends BaseAuditEvent {
   event_type: "cache";
   namespace: string;
-  action: "hit" | "miss" | "grounding_failed" | "store" | "invalidate";
+  action: "hit" | "miss" | "grounding_failed" | "model_changed" | "store" | "invalidate";
 }
 
 /** Emitted on security-relevant events (injection attempts, auth failures, etc.). */
