@@ -80,7 +80,22 @@ export class CohereReranker implements Reranker {
   }
 }
 
-/** Build the default reranker. (Swap in `CohereReranker` directly for a cross-encoder.) */
-export function createReranker(_env: Env): Reranker {
+/**
+ * Build the configured reranker from env.
+ *
+ * `RERANKER=hybrid` (default) returns the dependency-free {@link HybridReranker};
+ * `RERANKER=cohere` returns the cross-encoder {@link CohereReranker} and requires
+ * `COHERE_API_KEY` (the same key the Cohere embedder uses). `RERANK_MODEL`, when set,
+ * overrides Cohere's default rerank model.
+ */
+export function createReranker(env: Env): Reranker {
+  if (env.RERANKER === "cohere") {
+    if (!env.COHERE_API_KEY) {
+      throw new Error(
+        "RERANKER=cohere requires COHERE_API_KEY to be set. See CONFIG.md#rerank.",
+      );
+    }
+    return new CohereReranker(env.COHERE_API_KEY, env.RERANK_MODEL);
+  }
   return new HybridReranker();
 }

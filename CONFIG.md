@@ -121,6 +121,8 @@ Per-store variables:
 |---|---|---|
 | `TOP_K_RESULTS` | `10` | Candidates retrieved from the vector store before rerank. |
 | `TOP_K_AFTER_RERANK` | `5` | Chunks kept after rerank and injected into context. |
+| `RERANKER` | `hybrid` | `hybrid` (dependency-free) or `cohere` (cross-encoder). See [Rerank](#rerank). |
+| `RERANK_MODEL` | — | Overrides the Cohere rerank model id (`RERANKER=cohere` only). |
 | `HYBRID_SEARCH` | `false` | `true` layers BM25 keyword search on top of semantic search. Recommended for exact-match terminology (and for federal). |
 
 ---
@@ -129,8 +131,8 @@ Per-store variables:
 
 Initial retrieval casts wide (`TOP_K_RESULTS`); the reranker refines down to `TOP_K_AFTER_RERANK` before generation. This consistently outperforms naive top-K alone, so reranking is on by default.
 
-- **Default reranker:** a dependency-free **lexical + vector hybrid** scorer (top-K → top-N). No extra service or API key required.
-- **Swap-in:** a Cohere cross-encoder (`CohereReranker`) can be substituted for higher-quality reranking. It needs `COHERE_API_KEY`.
+- **Default reranker (`RERANKER=hybrid`):** a dependency-free **lexical + vector hybrid** scorer (top-K → top-N). No extra service or API key required.
+- **Cohere cross-encoder (`RERANKER=cohere`):** higher-quality reranking via Cohere's rerank API. Requires `COHERE_API_KEY`; set `RERANK_MODEL` to override the default model (`rerank-english-v3.0`). Selecting `cohere` without a key fails fast at startup.
 
 ---
 
@@ -182,13 +184,13 @@ npm run seed
 
 ### Source security (SSRF / file reads)
 
-The ingestion loaders fetch operator-supplied URLs and read operator-supplied paths. On the hosted admin route (`/api/ingest`) those inputs are effectively attacker-influenced, so the url/sitemap/file loaders run behind a deny-by-default security policy (`packages/ingestion/src/loaders/security.ts`). Defaults are safe out of the box; the variables below tighten them further.
+The ingestion loaders fetch operator-supplied URLs and read operator-supplied paths. On the hosted admin route (`/api/ingest`) those inputs are effectively attacker-influenced, so the url/sitemap/confluence/file loaders run behind a deny-by-default security policy (`packages/ingestion/src/loaders/security.ts`). Defaults are safe out of the box; the variables below tighten them further.
 
 | Var | Default | Notes |
 |---|---|---|
 | `INGEST_ROOT` | — | When set, every file path is confined to this directory after `..`/symlink resolution (a trailing-separator prefix check, so `/data/ingest-evil` can't pose as a child of `/data/ingest`). Unset → local paths are trusted unchanged (the CLI legitimately reads anywhere). |
 | `INGEST_URL_ALLOWLIST` | — | Comma-separated host allowlist for the url/sitemap loaders. An entry is an exact host (`example.com`) or a leading-dot suffix (`.example.com`, which matches `a.example.com` **and** bare `example.com`). Unset → any *public* host is allowed (still subject to the private-IP block). An empty list allows nothing. |
-| `INGEST_MAX_BYTES` | `10000000` | Hard cap (10 MB) on a fetched body, enforced by streaming and aborting early — protects against decompression-bomb / unbounded-response memory exhaustion even when `Content-Length` lies or is absent. |
+| `INGEST_MAX_BYTES` | `10000000` | Hard cap (10 MB) on a fetched body, enforced by streaming and aborting early — protects against decompression-bomb / unbounded-response memory exhaustion even when `Content-Length` lies or is absent. Also caps local PDF/DOCX reads (those loaders buffer the whole file, so the file is size-gated before it is read). |
 | `INGEST_TIMEOUT_MS` | `15000` | Per-fetch timeout via `AbortController`; stops a slow-loris endpoint from hanging the crawl. |
 | `INGEST_ALLOW_PRIVATE_NETWORKS` | `false` | **DANGER.** `true` skips the private-IP gate entirely. Only for the trusted local CLI crawling an intranet — never for the hosted/admin surface, where it re-opens the SSRF hole. |
 
@@ -198,6 +200,7 @@ What the policy enforces:
 - **Private/loopback/link-local/metadata blocking (IPv4 + IPv6)** — fetches to `127.0.0.0/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16` (which includes the `169.254.169.254` cloud-metadata IP), `100.64/10` CGNAT, `0.0.0.0/8`, and the IPv6 equivalents (`::1`, `::`, `fc00::/7` unique-local, `fe80::/10` link-local, and IPv4-mapped `::ffff:a.b.c.d`) are rejected. A public hostname that **resolves** to one of these is also rejected (the gate is applied to every resolved address).
 - **Per-request size and timeout caps** — `INGEST_MAX_BYTES` and `INGEST_TIMEOUT_MS` above.
 - **Redirect re-validation** — redirects are followed manually with `redirect: "manual"` and **every hop is re-validated** against the same gate, so an allowlisted URL cannot `302` you to `http://169.254.169.254/…`.
+- **Confluence base-URL gate** — the Confluence loader validates `CONFLUENCE_BASE_URL` (and every paginated `_links.next` URL) against the same scheme/allowlist/private-IP gate before each request, so a misconfigured base URL can't turn the loader into an SSRF sink.
 
 > **Documented residual limitations.** Two classes of attack are **not** fully covered: (1) **DNS-rebinding TOCTOU** — the host is resolved and checked at validation time, but a hostile resolver could return a different address at connection time; and (2) **exotic host encodings** — unusual IPv6 forms and octal-or-integer-encoded IPv4 hosts may slip past the literal classifier. For hostile environments, **pin IPs at the connection layer** (resolve once, dial the vetted address) rather than relying on this gate alone.
 
@@ -210,6 +213,7 @@ What the policy enforces:
 | `PII_REDACTION_ENABLED` | `false` | `true` for any deployment handling personal data |
 | `PII_REDACTION_PROVIDER` | `presidio` | `presidio` \| `aws-comprehend` |
 | `PRESIDIO_URL` | `http://localhost:5002` | Presidio service endpoint (when provider is `presidio`) |
+| `PRESIDIO_MIN_CONFIDENCE` | `0` | Minimum analyzer confidence `[0,1]` for a span to be redacted. `0` redacts every detection (conservative default); raise it (e.g. `0.6`–`0.8`) to suppress low-confidence false positives at the cost of recall. |
 
 Federal deployments enable redaction with `aws-comprehend` inside the GovCloud boundary.
 

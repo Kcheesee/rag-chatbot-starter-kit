@@ -94,6 +94,12 @@ export const EnvSchema = z
     HYBRID_SEARCH: zBool(false),
     MAX_CONTEXT_TOKENS: z.coerce.number().int().positive().default(8000),
     QUERY_REWRITE: zBool(false),
+    // Reranker that refines top-K retrieval to top-N before generation.
+    //   hybrid — dependency-free blend of vector similarity + lexical coverage (default).
+    //   cohere — Cohere's cross-encoder rerank API; requires COHERE_API_KEY. RERANK_MODEL
+    //            overrides the model id (default rerank-english-v3.0). See CONFIG.md#rerank.
+    RERANKER: z.enum(["hybrid", "cohere"]).default("hybrid"),
+    RERANK_MODEL: z.string().optional(),
 
     // ── Response cache ──
     CACHE_ENABLED: zBool(true),
@@ -149,6 +155,10 @@ export const EnvSchema = z
     PII_REDACTION_ENABLED: zBool(false),
     PII_REDACTION_PROVIDER: z.enum(["presidio", "aws-comprehend"]).default("presidio"),
     PRESIDIO_URL: z.string().optional(),
+    // Minimum Presidio confidence [0,1] for a detection to be redacted. Default 0 keeps the
+    // conservative "redact everything Presidio flags" behaviour; raise it (e.g. 0.6–0.8) to
+    // trade recall for fewer false-positive redactions corrupting text. See CONFIG.md#pii-redaction.
+    PRESIDIO_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0),
 
     // ── Audit logging ──
     AUDIT_LOG_ENABLED: zBool(false),

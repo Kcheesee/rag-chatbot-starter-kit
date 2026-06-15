@@ -49,6 +49,8 @@ export interface PIIConfig {
   PII_REDACTION_ENABLED: boolean;
   PII_REDACTION_PROVIDER: "presidio" | "aws-comprehend";
   PRESIDIO_URL?: string;
+  /** Minimum Presidio confidence [0,1] for a span to be redacted. Defaults to 0 (redact all). */
+  PRESIDIO_MIN_CONFIDENCE?: number;
   AWS_REGION?: string;
 }
 

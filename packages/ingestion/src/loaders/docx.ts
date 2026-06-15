@@ -12,11 +12,16 @@
  * downstream is responsible for slicing it.
  */
 
+import { stat } from "node:fs/promises";
+
 import type {
   DocumentLoader,
   DocumentMetadata,
   RAGDocument,
 } from "@rag-chat-agent/rag-core";
+
+/** Default cap on a DOCX read into memory (10 MB), matching the loader fetch cap. */
+const DEFAULT_MAX_BYTES = 10_000_000;
 
 /**
  * Minimal structural view of the slice of `mammoth` we touch.
@@ -64,9 +69,22 @@ function collapseBlankLines(text: string): string {
 export class DocxLoader implements DocumentLoader {
   public readonly sourceType = "docx";
 
-  public constructor(private readonly filePath: string) {}
+  /**
+   * @param filePath - Path to the `.docx` on disk.
+   * @param maxBytes - Hard cap on the file size. `mammoth` unzips and buffers the whole
+   *   document, so an unbounded read is a memory-exhaustion / zip-bomb vector; defaults
+   *   to 10 MB.
+   */
+  public constructor(
+    private readonly filePath: string,
+    private readonly maxBytes: number = DEFAULT_MAX_BYTES,
+  ) {}
 
   public async load(): Promise<RAGDocument[]> {
+    // Size-gate BEFORE mammoth opens (and unzips) the file — a too-large/zip-bomb DOCX
+    // must fail fast, not after it has expanded in memory.
+    await this.assertWithinSizeCap();
+
     let mammoth: MammothModule;
     try {
       // WHY lazy dynamic import: keeps `mammoth` (and its zip/XML transitive deps) off
@@ -101,5 +119,24 @@ export class DocxLoader implements DocumentLoader {
     };
 
     return [{ content, metadata }];
+  }
+
+  /** Reject a file larger than `maxBytes` before mammoth opens it. */
+  private async assertWithinSizeCap(): Promise<void> {
+    let size: number;
+    try {
+      ({ size } = await stat(this.filePath));
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(
+        `Failed to stat DOCX "${this.filePath}": ${reason}. See CONFIG.md#ingestion.`,
+      );
+    }
+    if (size > this.maxBytes) {
+      throw new Error(
+        `DOCX "${this.filePath}" is ${size} bytes, over the ${this.maxBytes}-byte cap ` +
+          `(INGEST_MAX_BYTES). See CONFIG.md#ingestion.`,
+      );
+    }
   }
 }

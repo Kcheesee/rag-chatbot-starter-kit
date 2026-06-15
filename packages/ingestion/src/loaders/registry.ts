@@ -50,14 +50,18 @@ const EXT_TO_TYPE: Record<string, LoaderSourceType> = {
   ".txt": "txt",
 };
 
-function fileLoaderFor(type: LoaderSourceType, path: string): DocumentLoader | null {
+function fileLoaderFor(
+  type: LoaderSourceType,
+  path: string,
+  maxBytes: number | undefined,
+): DocumentLoader | null {
   switch (type) {
     case "pdf":
-      return new PdfLoader(path);
+      return new PdfLoader(path, maxBytes);
     case "md":
       return new MarkdownLoader(path);
     case "docx":
-      return new DocxLoader(path);
+      return new DocxLoader(path, maxBytes);
     case "txt":
       return new TextLoader(path);
     default:
@@ -111,7 +115,7 @@ export async function createLoaders(
           "See CONFIG.md#ingestion.",
       );
     }
-    return [new ConfluenceLoader({ ...creds.confluence, pageIdOrSpaceKey: source })];
+    return [new ConfluenceLoader({ ...creds.confluence, pageIdOrSpaceKey: source }, sec)];
   }
 
   // File-based: `source` is a directory or a single file path.
@@ -134,7 +138,9 @@ export async function createLoaders(
       // Re-check EACH file: walkDir can surface symlinks pointing outside the root, so
       // every individual path is re-validated (and we use the returned real path).
       const safePath = assertPathAllowed(path, sec.ingestRoot);
-      const loader = fileLoaderFor(type, safePath);
+      // Buffer-into-memory loaders (pdf/docx) get the same byte cap as network fetches,
+      // so an oversized local file can't exhaust memory before parsing.
+      const loader = fileLoaderFor(type, safePath, sec.maxBytes);
       if (loader) loaders.push(loader);
     }
   }

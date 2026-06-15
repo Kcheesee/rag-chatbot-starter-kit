@@ -61,6 +61,7 @@ export async function runIngest(params: IngestRequest): Promise<IngestResult> {
     PII_REDACTION_ENABLED: env.PII_REDACTION_ENABLED,
     PII_REDACTION_PROVIDER: env.PII_REDACTION_PROVIDER,
     ...(env.PRESIDIO_URL ? { PRESIDIO_URL: env.PRESIDIO_URL } : {}),
+    PRESIDIO_MIN_CONFIDENCE: env.PRESIDIO_MIN_CONFIDENCE,
     ...(env.AWS_REGION ? { AWS_REGION: env.AWS_REGION } : {}),
   });
   const audit = initAuditLogger(toAuditLoggerConfig(env));

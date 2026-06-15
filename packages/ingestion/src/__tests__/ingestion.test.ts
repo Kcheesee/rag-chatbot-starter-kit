@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  DocxLoader,
   MarkdownLoader,
+  PdfLoader,
   TextLoader,
   UrlLoader,
   chunkDocuments,
@@ -93,6 +95,25 @@ describe("PII redaction", () => {
     expect(result.entitiesFound).toEqual([{ type: "SSN", count: 1 }]);
   });
 
+  it("PresidioRedactor drops detections below the confidence threshold", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        // One high-confidence hit and one low-confidence false positive.
+        json: async () => [
+          { entity_type: "US_SSN", start: 10, end: 21, score: 0.99 },
+          { entity_type: "PERSON", start: 0, end: 2, score: 0.2 },
+        ],
+      }),
+    );
+    const redactor = new PresidioRedactor("http://presidio:5002", 0.6);
+    const result = await redactor.redact("My SSN is 123-45-6789 thanks.");
+    // The 0.2-score PERSON span ("My") is skipped; only the SSN is redacted.
+    expect(result.text).toBe("My SSN is [REDACTED_SSN] thanks.");
+    expect(result.entitiesFound).toEqual([{ type: "SSN", count: 1 }]);
+  });
+
   it("createPIIRedactor returns null when disabled and a redactor when enabled", () => {
     expect(
       createPIIRedactor({ PII_REDACTION_ENABLED: false, PII_REDACTION_PROVIDER: "presidio" }),
@@ -114,6 +135,16 @@ describe("file loaders", () => {
     const [doc] = await new MarkdownLoader(fixture("sample.md")).load();
     expect(doc?.content).toContain("## Returns");
     expect(doc?.metadata.sourceType).toBe("md");
+  });
+
+  it("PdfLoader rejects a file over the byte cap before reading it", async () => {
+    // A 1-byte cap is exceeded by any real fixture, so the size gate trips before the
+    // pdf-parse dependency is even imported.
+    await expect(new PdfLoader(fixture("sample.txt"), 1).load()).rejects.toThrow(/over the 1-byte cap/);
+  });
+
+  it("DocxLoader rejects a file over the byte cap before reading it", async () => {
+    await expect(new DocxLoader(fixture("sample.txt"), 1).load()).rejects.toThrow(/over the 1-byte cap/);
   });
 });
 

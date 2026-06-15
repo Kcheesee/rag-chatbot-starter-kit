@@ -30,7 +30,16 @@ interface PresidioResult {
 export class PresidioRedactor implements PIIRedactor {
   readonly provider = "presidio";
 
-  constructor(private readonly url: string) {}
+  /**
+   * @param url - Base URL of the Presidio analyzer.
+   * @param minConfidence - Drop detections whose analyzer `score` is below this [0,1]
+   *   threshold. Defaults to 0 (redact everything Presidio flags); raise it to suppress
+   *   low-confidence false positives at the cost of recall.
+   */
+  constructor(
+    private readonly url: string,
+    private readonly minConfidence: number = 0,
+  ) {}
 
   async redact(text: string): Promise<RedactedText> {
     const res = await fetch(`${this.url.replace(/\/$/, "")}/analyze`, {
@@ -52,6 +61,9 @@ export class PresidioRedactor implements PIIRedactor {
     const results = (await res.json()) as PresidioResult[];
     const spans: PIISpan[] = [];
     for (const r of results) {
+      // Skip detections the analyzer isn't confident enough about — a low-score false
+      // positive would redact (and corrupt) legitimate text.
+      if (r.score < this.minConfidence) continue;
       const type = PRESIDIO_TO_ENTITY[r.entity_type];
       if (type) spans.push({ start: r.start, end: r.end, type });
     }

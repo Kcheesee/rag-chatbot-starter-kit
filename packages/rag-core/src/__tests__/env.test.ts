@@ -10,6 +10,8 @@ describe("loadEnv — defaults & coercion", () => {
     expect(env.VECTOR_STORE).toBe("chroma");
     expect(env.MIN_RETRIEVAL_CONFIDENCE).toBe(0.7);
     expect(env.DEPLOYMENT_MODE).toBe("standard");
+    expect(env.RERANKER).toBe("hybrid");
+    expect(env.PRESIDIO_MIN_CONFIDENCE).toBe(0);
   });
 
   it("coerces numbers and booleans from strings", () => {

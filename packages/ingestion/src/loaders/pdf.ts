@@ -1,6 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import type { DocumentLoader, RAGDocument, DocumentMetadata } from "@rag-chat-agent/rag-core";
+
+/** Default cap on a PDF read into memory (10 MB), matching the loader fetch cap. */
+const DEFAULT_MAX_BYTES = 10_000_000;
 
 /**
  * Minimal structural shape of `pdf-parse`'s result, declared locally so typecheck
@@ -48,7 +51,15 @@ function collapseBlankLines(text: string): string {
 export class PdfLoader implements DocumentLoader {
   public readonly sourceType = "pdf";
 
-  constructor(private readonly filePath: string) {}
+  /**
+   * @param filePath - Path to the PDF on disk.
+   * @param maxBytes - Hard cap on the file size read into memory. `pdf-parse` buffers the
+   *   entire file, so an unbounded read is a memory-exhaustion vector; defaults to 10 MB.
+   */
+  constructor(
+    private readonly filePath: string,
+    private readonly maxBytes: number = DEFAULT_MAX_BYTES,
+  ) {}
 
   /**
    * Read the PDF from disk and extract its text as one document.
@@ -57,6 +68,10 @@ export class PdfLoader implements DocumentLoader {
    * dynamic import exposes the callable as `.default`, not as the namespace itself.
    */
   public async load(): Promise<RAGDocument[]> {
+    // Size-gate BEFORE buffering the file or importing the parser — a too-large PDF must
+    // fail fast, not after it has already been read into memory.
+    await this.assertWithinSizeCap();
+
     let pdf: PdfParseFn;
     try {
       const mod = (await import("pdf-parse")) as unknown as { default: PdfParseFn };
@@ -95,5 +110,24 @@ export class PdfLoader implements DocumentLoader {
     };
 
     return [{ content, metadata }];
+  }
+
+  /** Reject a file larger than `maxBytes` before any of it is read into memory. */
+  private async assertWithinSizeCap(): Promise<void> {
+    let size: number;
+    try {
+      ({ size } = await stat(this.filePath));
+    } catch (cause) {
+      throw new Error(
+        `PdfLoader: failed to stat PDF at "${this.filePath}". See CONFIG.md#ingestion.`,
+        { cause },
+      );
+    }
+    if (size > this.maxBytes) {
+      throw new Error(
+        `PdfLoader: "${this.filePath}" is ${size} bytes, over the ${this.maxBytes}-byte ` +
+          `cap (INGEST_MAX_BYTES). See CONFIG.md#ingestion.`,
+      );
+    }
   }
 }

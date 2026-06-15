@@ -14,7 +14,10 @@ export function createPIIRedactor(config: PIIConfig): PIIRedactor | null {
 
   switch (config.PII_REDACTION_PROVIDER) {
     case "presidio":
-      return new PresidioRedactor(config.PRESIDIO_URL ?? "http://localhost:5002");
+      return new PresidioRedactor(
+        config.PRESIDIO_URL ?? "http://localhost:5002",
+        config.PRESIDIO_MIN_CONFIDENCE ?? 0,
+      );
     case "aws-comprehend":
       return new ComprehendRedactor(config.AWS_REGION ?? "us-east-1");
     default: {

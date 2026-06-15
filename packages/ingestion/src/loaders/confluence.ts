@@ -21,6 +21,8 @@
 
 import type { DocumentLoader, RAGDocument, DocumentMetadata } from "@rag-chat-agent/rag-core";
 
+import { assertUrlAllowed, type LoaderSecurity } from "./security";
+
 /**
  * Minimal structural view of the slice of cheerio's API we touch.
  *
@@ -99,6 +101,9 @@ export class ConfluenceLoader implements DocumentLoader {
    *   (space mode); interpreted per `isSpaceKey`.
    * @param opts.isSpaceKey - When `true`, treat `pageIdOrSpaceKey` as a space key and
    *   crawl the whole space; otherwise fetch the one page by id.
+   * @param sec - SSRF policy applied to every request URL (see {@link getJson}). Defaults
+   *   to the safe deny-by-default policy so a `baseUrl` pointing at an internal/metadata
+   *   host is rejected unless the operator explicitly opts into private networks.
    */
   public constructor(
     private readonly opts: {
@@ -108,6 +113,7 @@ export class ConfluenceLoader implements DocumentLoader {
       pageIdOrSpaceKey: string;
       isSpaceKey?: boolean;
     },
+    private readonly sec: LoaderSecurity = {},
   ) {}
 
   /**
@@ -201,10 +207,20 @@ export class ConfluenceLoader implements DocumentLoader {
   /**
    * GET a Confluence URL and parse its JSON body, authenticated with Basic auth.
    *
-   * @throws on transport failure or any non-2xx status, with a message ending in the
-   *   config pointer so a misconfigured instance is diagnosable from the error alone.
+   * Every URL — the initial request AND each server-provided `_links.next` page — is run
+   * through {@link assertUrlAllowed} first, applying the same SSRF gate (scheme / allowlist
+   * / private-IP + DNS-rebinding checks) the url/sitemap loaders use. Unlike those, this
+   * carries a Basic-auth header that `guardedFetch` cannot forward, so we validate the URL
+   * here and then fetch directly. WHY this matters: a misconfigured `CONFLUENCE_BASE_URL`
+   * (e.g. `http://169.254.169.254/…`) would otherwise turn the loader into an SSRF sink.
+   *
+   * @throws if the URL is disallowed by the SSRF policy, on transport failure, or on any
+   *   non-2xx status — messages end in the config pointer so a misconfigured instance is
+   *   diagnosable from the error alone.
    */
   private async getJson<T>(url: string): Promise<T> {
+    await assertUrlAllowed(url, this.sec);
+
     let res: Response;
     try {
       res = await fetch(url, {
