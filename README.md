@@ -396,6 +396,35 @@ npm run ingest -- --source ./docs --type pdf,md --namespace acme-corp
 npm run ingest -- --source https://yoursite.com/docs --type url --namespace acme-corp
 ```
 
+#### Or: try the bundled demo knowledge bases
+
+Want to kick the tires before wiring your own docs? `npm run seed` ingests four
+ready-made corpora, each into its **own namespace** — which doubles as a live demo of
+the kit's tenant isolation (the same pipeline answers only from the corpus you select):
+
+| Namespace | Knowledge base | Try asking |
+|---|---|---|
+| `default` | Support desk | *"What is the refund window?"* |
+| `bread` | Home breadmaking | *"Why is my crumb dense?"* · *"What is autolyse?"* |
+| `meds` | OTC medication reference | *"What is the generic name of Tylenol?"* · *"Is Pepcid a PPI?"* |
+| `pubsec` | Citizen-services FAQ | *"How do I renew my passport?"* · *"What is REAL ID?"* |
+
+```bash
+npm run seed                 # seed all four corpora
+npm run seed -- --only bread # or just one (default | bread | meds | pubsec)
+```
+
+In the web app, switch corpora with the **Knowledge base** dropdown at the top. Ask
+something outside the selected corpus (e.g. *"what's the capital of France?"* in the
+bread KB) to watch the **low-confidence fallback** decline instead of hallucinate.
+
+The `meds` and `pubsec` corpora are deliberately high-stakes — they carry "not advice,
+verify with a professional / official source" disclaimers, which makes them a good way
+to see the citation, confidence-gate, and escalation guardrails earn their keep. The
+medication data is an educational **generic↔brand reference with no dosing** (see
+[`scripts/seed-data/meds/`](scripts/seed-data/meds/)); the citizen-services data is
+illustrative sample content, not official guidance.
+
 ### 5. Run the app
 
 ```bash
