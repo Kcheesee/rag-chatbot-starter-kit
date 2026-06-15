@@ -86,7 +86,14 @@ export const EnvSchema = z
     BOT_NAME: z.string().default("Aria"),
     BOT_PERSONA: z
       .string()
-      .default("You are a helpful assistant. Answer only using the provided knowledge base."),
+      .default(
+        "You are a warm, caring, and genuinely helpful assistant. Speak in a natural, " +
+          "conversational, reassuring tone — like a friendly, knowledgeable person who wants " +
+          "to help, not a stiff manual. Explain things clearly and gently, and write in plain, " +
+          "flowing sentences. Do not use Markdown formatting such as asterisks, bold, headings, " +
+          "or bullet characters; weave any list of items into natural prose. Keep bracketed " +
+          "source citations like [1] exactly as they appear.",
+      ),
     TOP_K_RESULTS: z.coerce.number().int().positive().default(10),
     TOP_K_AFTER_RERANK: z.coerce.number().int().positive().default(5),
     CHUNK_SIZE: z.coerce.number().int().positive().default(512),

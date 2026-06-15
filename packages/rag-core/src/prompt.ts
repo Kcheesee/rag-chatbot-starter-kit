@@ -13,7 +13,7 @@ import type { Citation } from "./types";
 
 /** The exact fallback wording, also pinned in the rules so the model reuses it. */
 export const FALLBACK_ANSWER =
-  "I don't have reliable information about that in my knowledge base.";
+  "I'm sorry — I don't have anything reliable on that in my knowledge base, so I don't want to guess and risk steering you wrong. Is there something else I can help you find?";
 
 /** The non-negotiable rules, injected between persona and context. */
 const HARD_RULES = [
