@@ -55,6 +55,27 @@ export interface PipelineDeps {
   audit: AuditLogger;
 }
 
+/**
+ * Per-namespace policy overrides — the kit's "governance per tenant" lever.
+ *
+ * The same pipeline can run a permissive, free-flow posture for a low-stakes corpus and
+ * a strict, cautious posture for a sensitive one, just by varying these per namespace.
+ * Any field left undefined falls back to the base {@link PipelineConfig}. This is how
+ * the demo makes "bread = open, meds = guardrailed" REAL rather than just documented.
+ */
+export interface NamespacePolicy {
+  /** Override the system-prompt persona for this namespace (e.g. a cautious medical tone). */
+  persona?: string;
+  /** Override the retrieval-confidence gate (higher = answer only when very relevant). */
+  minConfidence?: number;
+  /** Override strict grounding (escalate an answer with no valid citation). */
+  strictGrounding?: boolean;
+  /** Override whether the faithfulness check runs. */
+  faithfulnessCheck?: boolean;
+  /** Override the faithfulness pass threshold. */
+  faithfulnessThreshold?: number;
+}
+
 /** Pipeline behaviour, derived from validated env. */
 export interface PipelineConfig {
   persona: string;
@@ -80,6 +101,8 @@ export interface PipelineConfig {
   maxTokens: number;
   temperature: number;
   model: string;
+  /** Optional per-namespace overrides of persona + guardrail knobs. */
+  namespacePolicies?: Record<string, NamespacePolicy>;
 }
 
 const nowIso = (): string => new Date().toISOString();
@@ -110,6 +133,17 @@ export class RAGPipelineImpl implements RAGPipeline {
       if (injectionSuspected) {
         this.logSecurity(input, started, "Query matched a prompt-injection pattern.");
       }
+
+      // Resolve the effective policy for this namespace: per-namespace overrides on top
+      // of the base config. This is what lets one engine run an open posture for a
+      // low-stakes corpus and a strict, cautious one for a sensitive corpus.
+      const policy = this.config.namespacePolicies?.[input.namespace];
+      const persona = policy?.persona ?? this.config.persona;
+      const minConfidence = policy?.minConfidence ?? this.config.minConfidence;
+      const strictGrounding = policy?.strictGrounding ?? this.config.strictGrounding;
+      const faithfulnessCheck = policy?.faithfulnessCheck ?? this.config.faithfulnessCheck;
+      const faithfulnessThreshold =
+        policy?.faithfulnessThreshold ?? this.config.faithfulnessThreshold;
 
       // 2. Load session history.
       const history = await this.deps.sessionStore.getHistory(input.sessionId);
@@ -149,7 +183,7 @@ export class RAGPipelineImpl implements RAGPipeline {
 
       // 7. Confidence gate — fall back WITHOUT an LLM call when nothing is relevant.
       const confidence = retrieved.reduce((max, r) => Math.max(max, r.score), 0);
-      if (confidence < this.config.minConfidence) {
+      if (confidence < minConfidence) {
         yield* this.emitFallback(input, started, query, confidence);
         return;
       }
@@ -157,8 +191,8 @@ export class RAGPipelineImpl implements RAGPipeline {
       // 8. Rerank to top-N.
       const reranked = await this.deps.reranker.rerank(effectiveQuery, retrieved, this.config.topN);
 
-      // 9. Build the context window (token-budget enforced).
-      const { systemPrompt, citations, messages } = this.buildContext(query, history, reranked);
+      // 9. Build the context window (token-budget enforced) with the effective persona.
+      const { systemPrompt, citations, messages } = this.buildContext(persona, query, history, reranked);
 
       // 10. Generate (streamed).
       let answer = "";
@@ -182,7 +216,7 @@ export class RAGPipelineImpl implements RAGPipeline {
       // is a signal the surface acts on (badge / route / suppress), not a silent pass.
       let escalate = false;
       let escalateReason: string | undefined;
-      if (this.config.strictGrounding && sources.length === 0) {
+      if (strictGrounding && sources.length === 0) {
         escalate = true;
         escalateReason = "no_grounded_citations";
       }
@@ -190,14 +224,14 @@ export class RAGPipelineImpl implements RAGPipeline {
       // 12. Faithfulness check (optional). An UNPARSEABLE score escalates — it is never
       // treated as "fully faithful" (the previous fail-open behaviour).
       let faithfulness: number | undefined;
-      if (this.config.faithfulnessCheck) {
+      if (faithfulnessCheck) {
         const score = await this.scoreFaithfulness(answer, reranked);
         if (score === null) {
           escalate = true;
           escalateReason ??= "faithfulness_unparseable";
         } else {
           faithfulness = score;
-          if (score < this.config.faithfulnessThreshold) {
+          if (score < faithfulnessThreshold) {
             escalate = true;
             escalateReason ??= "faithfulness_below_threshold";
           }
@@ -316,6 +350,7 @@ export class RAGPipelineImpl implements RAGPipeline {
    * truncate mid-chunk.
    */
   private buildContext(
+    persona: string,
     query: string,
     history: ChatMessage[] | { role: "user" | "assistant"; content: string }[],
     chunks: SearchResult[],
@@ -324,7 +359,7 @@ export class RAGPipelineImpl implements RAGPipeline {
     let used = chunks;
 
     const assemble = (): { systemPrompt: string; messages: ChatMessage[]; tokens: number } => {
-      const systemPrompt = buildSystemPrompt(this.config.persona, used);
+      const systemPrompt = buildSystemPrompt(persona, used);
       const messages: ChatMessage[] = [...turns, { role: "user", content: query }];
       const tokens =
         estimateTokens(systemPrompt) +

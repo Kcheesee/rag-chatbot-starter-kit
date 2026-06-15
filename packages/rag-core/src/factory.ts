@@ -11,7 +11,7 @@ import { initAuditLogger } from "@rag-chat-agent/audit-logger";
 import { createEmbeddingAdapter, createLLMAdapter } from "@rag-chat-agent/llm-adapters";
 import { createVectorAdapter } from "@rag-chat-agent/vector-adapters";
 
-import { toAuditLoggerConfig, type Env } from "./env";
+import { toAuditLoggerConfig, toNamespacePolicies, type Env } from "./env";
 import type { RAGPipeline } from "./types";
 import { RAGPipelineImpl } from "./pipeline";
 import { createResponseCache } from "./cache/factory";
@@ -52,6 +52,7 @@ export function createPipeline(env: Env): RAGPipeline {
       maxTokens: env.MAX_TOKENS,
       temperature: env.TEMPERATURE,
       model: env.LLM_MODEL,
+      namespacePolicies: toNamespacePolicies(env),
     },
   );
 }

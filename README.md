@@ -425,6 +425,34 @@ medication data is an educational **generic↔brand reference with no dosing** (
 [`scripts/seed-data/meds/`](scripts/seed-data/meds/)); the citizen-services data is
 illustrative sample content, not official guidance.
 
+#### Governance: the demo corpora run at different levels of control
+
+The same pipeline serves all four corpora — but each namespace runs under its own
+**policy**, so the *governance posture* matches the *sensitivity* of the content. This is
+the kit's per-tenant governance lever, and it's what makes "open for bread, locked-down
+for meds" real rather than just a promise:
+
+| Corpus | Posture | Persona | Confidence gate | Strict grounding | Faithfulness |
+|---|---|---|---|---|---|
+| `bread` | **Open / free-flow** | warm, recommends freely | low (0.55) | off | off |
+| `pubsec` | **Moderate** | cites the FAQ, "verify with the official agency" | 0.70 | on | off |
+| `meds` | **Guardrailed** | refuses dosing/diagnosis/personal picks; always cites | high (0.80) | on | on |
+| `default` | base settings | global `BOT_PERSONA` | global | global | global |
+
+So the **bread** bot chats loosely and suggests freely (low stakes), while the **meds**
+bot answers only when retrieval is strongly relevant, escalates anything it can't ground
+in a citation, runs the extra faithfulness check, and is personally instructed to decline
+doses, diagnoses, and "what should I take" — deferring to a pharmacist. Same engine, two
+very different risk postures.
+
+These postures ship as built-in defaults (`DEMO_NAMESPACE_POLICIES`), so the difference
+shows out of the box with no config. Set your own per-namespace policies — persona plus
+the guardrail knobs (`minConfidence`, `strictGrounding`, `faithfulnessCheck`,
+`faithfulnessThreshold`) — via the `NAMESPACE_POLICIES` env var (JSON keyed by namespace;
+merged over the defaults). It's the right place to encode "this tenant's data is
+sensitive, dial the guardrails up." Anything you don't override falls back to the global
+settings.
+
 ### 5. Run the app
 
 ```bash

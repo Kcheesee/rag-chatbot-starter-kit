@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AuditLogger } from "@rag-chat-agent/audit-logger";
-import type { EmbeddingAdapter, LLMAdapter } from "@rag-chat-agent/llm-adapters";
+import type { ChatMessage, EmbeddingAdapter, LLMAdapter } from "@rag-chat-agent/llm-adapters";
 import type { SearchResult, StoredChunk, VectorAdapter } from "@rag-chat-agent/vector-adapters";
 
 import {
@@ -68,16 +68,21 @@ function vectorStore(results: SearchResult[], byId: Record<string, StoredChunk> 
   return self;
 }
 
-function llm(tokens: string[], chatReply = "0.95"): LLMAdapter & { streamCalls: number } {
+function llm(
+  tokens: string[],
+  chatReply = "0.95",
+): LLMAdapter & { streamCalls: number; lastSystem?: string } {
   const adapter = {
     provider: "mock",
     model: "mock",
     streamCalls: 0,
+    lastSystem: undefined as string | undefined,
     async chat() {
       return { content: chatReply, model: "mock" } as const;
     },
-    async *stream() {
+    async *stream(_messages: ChatMessage[], options?: { system?: string }) {
       adapter.streamCalls += 1;
+      adapter.lastSystem = options?.system;
       for (const token of tokens) yield token;
     },
   };
@@ -383,6 +388,42 @@ describe("RAG pipeline", () => {
     const res = await p.query(input);
     expect(res.fromCache).toBe(false); // not served from the stale-model cache
     expect(model.streamCalls).toBe(1); // re-generated with the current model
+  });
+
+  it("a namespace policy raises the confidence gate (strict posture falls back)", async () => {
+    const { p, model } = pipeline({
+      results: [chunk("c1", "Refunds within 30 days.", 0.75)], // base gate (0.7) would pass
+      tokens: ["should not generate"],
+      cfg: {
+        minConfidence: 0.7,
+        namespacePolicies: { acme: { minConfidence: 0.9 } }, // input.namespace === "acme"
+      },
+    });
+    const res = await p.query(input);
+    expect(res.answer).toBe(FALLBACK_ANSWER); // 0.75 < policy 0.9 → fallback
+    expect(model.streamCalls).toBe(0);
+  });
+
+  it("a namespace policy can turn ON strict grounding when the base has it off", async () => {
+    const { p } = pipeline({
+      results: [chunk("c1", "Refunds within 30 days.", 0.95)],
+      tokens: ["An answer with no citation marker."],
+      cfg: { strictGrounding: false, namespacePolicies: { acme: { strictGrounding: true } } },
+    });
+    const res = await p.query(input);
+    expect(res.escalate).toBe(true);
+    expect(res.escalateReason).toBe("no_grounded_citations");
+  });
+
+  it("a namespace policy overrides the system-prompt persona", async () => {
+    const { p, model } = pipeline({
+      results: [chunk("c1", "x", 0.95)],
+      tokens: ["ok [1]"],
+      cfg: { persona: "BASE PERSONA", namespacePolicies: { acme: { persona: "MEDS PERSONA" } } },
+    });
+    await p.query(input);
+    expect(model.lastSystem).toContain("MEDS PERSONA");
+    expect(model.lastSystem).not.toContain("BASE PERSONA");
   });
 
   it("logs a security event on a suspected injection", async () => {

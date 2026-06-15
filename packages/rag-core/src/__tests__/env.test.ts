@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loadEnv } from "../env";
+import { DEMO_NAMESPACE_POLICIES, loadEnv, toNamespacePolicies } from "../env";
 
 describe("loadEnv — defaults & coercion", () => {
   it("applies defaults for an empty environment", () => {
@@ -59,5 +59,33 @@ describe("loadEnv — federal & GovCloud invariants", () => {
 
   it("requires a GovCloud region for bedrock-gov", () => {
     expect(() => loadEnv({ ...federalBase, AWS_REGION: "us-east-1" })).toThrow(/GovCloud/i);
+  });
+});
+
+describe("toNamespacePolicies — per-corpus governance", () => {
+  it("returns the bundled demo postures by default (meds strict, bread open)", () => {
+    const policies = toNamespacePolicies(loadEnv({}));
+    expect(policies).toEqual(DEMO_NAMESPACE_POLICIES);
+    expect(policies.meds?.strictGrounding).toBe(true);
+    expect(policies.meds?.faithfulnessCheck).toBe(true);
+    expect(policies.bread?.strictGrounding).toBe(false);
+  });
+
+  it("merges operator overrides over the demo defaults, per namespace", () => {
+    const policies = toNamespacePolicies(
+      loadEnv({ NAMESPACE_POLICIES: JSON.stringify({ acme: { minConfidence: 0.9, strictGrounding: true } }) }),
+    );
+    expect(policies.acme).toEqual({ minConfidence: 0.9, strictGrounding: true });
+    expect(policies.bread).toBeDefined(); // demo defaults preserved
+  });
+
+  it("throws on malformed JSON", () => {
+    expect(() => toNamespacePolicies(loadEnv({ NAMESPACE_POLICIES: "{not json" }))).toThrow(/valid JSON/i);
+  });
+
+  it("throws on an invalid policy shape (out-of-range / unknown key)", () => {
+    expect(() =>
+      toNamespacePolicies(loadEnv({ NAMESPACE_POLICIES: JSON.stringify({ x: { minConfidence: 5 } }) })),
+    ).toThrow(/invalid/i);
   });
 });

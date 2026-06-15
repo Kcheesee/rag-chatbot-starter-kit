@@ -26,10 +26,23 @@ export type {
 
 // Pipeline.
 export { createPipeline } from "./factory";
-export { RAGPipelineImpl, type PipelineConfig, type PipelineDeps } from "./pipeline";
+export {
+  RAGPipelineImpl,
+  type PipelineConfig,
+  type PipelineDeps,
+  type NamespacePolicy,
+} from "./pipeline";
 
 // Environment.
-export { loadEnv, resetEnvCache, toAuditLoggerConfig, EnvSchema, type Env } from "./env";
+export {
+  loadEnv,
+  resetEnvCache,
+  toAuditLoggerConfig,
+  toNamespacePolicies,
+  DEMO_NAMESPACE_POLICIES,
+  EnvSchema,
+  type Env,
+} from "./env";
 
 // Guardrail building blocks.
 export { sanitizeInput, type SanitizedInput } from "./sanitize";

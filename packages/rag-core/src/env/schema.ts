@@ -121,6 +121,11 @@ export const EnvSchema = z
     STRICT_GROUNDING: zBool(false),
     FAITHFULNESS_CHECK: zBool(false),
     FAITHFULNESS_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85),
+    // Per-namespace governance overrides as a JSON object, e.g.
+    //   {"meds":{"persona":"...","minConfidence":0.8,"strictGrounding":true}}
+    // Merged over the bundled demo defaults (bread=open, meds=strict, pubsec=moderate).
+    // See CONFIG.md#federal-deployment / the "governance" section in the README.
+    NAMESPACE_POLICIES: z.string().optional(),
 
     // ── Auth (consumed by the web app; here so the schema is the single source) ──
     AUTH_ENABLED: zBool(false),
