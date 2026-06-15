@@ -30,6 +30,8 @@ general cautions. Anyone deciding between them should check the label and ask a 
   sleep products, so people are often advised to avoid taking more than one acetaminophen-
   containing product at a time. Total daily limits and warnings are on the label.
 
+*Source: [MedlinePlus — Acetaminophen](https://medlineplus.gov/druginfo/meds/a681004.html)*
+
 ## Ibuprofen
 
 - **Generic name:** ibuprofen.
@@ -41,6 +43,8 @@ general cautions. Anyone deciding between them should check the label and ask a 
   long-term or high use, other organs. People with certain conditions are told to ask a
   clinician first.
 
+*Source: [MedlinePlus — Ibuprofen](https://medlineplus.gov/druginfo/meds/a682159.html)*
+
 ## Naproxen (OTC)
 
 - **Generic name:** naproxen sodium.
@@ -49,6 +53,8 @@ general cautions. Anyone deciding between them should check the label and ask a 
 - **Generally used for:** pain, fever, and inflammation. Compared with ibuprofen, naproxen
   is generally described as longer-acting, which is why the label spacing differs.
 - **General notes:** shares the general NSAID cautions noted above.
+
+*Source: [MedlinePlus — Naproxen](https://medlineplus.gov/druginfo/meds/a681029.html)*
 
 ## Aspirin
 
@@ -61,6 +67,8 @@ general cautions. Anyone deciding between them should check the label and ask a 
 - **General notes:** aspirin is generally **not given to children or teenagers** for viral
   illnesses because of the risk of a rare but serious condition (Reye's syndrome). This is a
   well-known label warning; defer to the label and a clinician.
+
+*Source: [MedlinePlus — Aspirin](https://medlineplus.gov/druginfo/meds/a682878.html)*
 
 ## Combination products
 
@@ -77,3 +85,18 @@ commonly advised to read every label and avoid doubling up on the same active in
   (dosing is out of scope for this reference)
 - "Which is better for my back pain, X or Y?" → decline to recommend; suggest asking a
   pharmacist or clinician. 🚫 (a personal medical recommendation)
+
+## Sources
+
+Authoritative references used on this page (NIH/NLM consumer drug information). Each was
+checked for the generic ↔ brand mapping, drug class, and general use described above.
+
+- [MedlinePlus — Acetaminophen](https://medlineplus.gov/druginfo/meds/a681004.html) —
+  generic ↔ Tylenol; analgesic/antipyretic (not an NSAID); general use for pain and fever.
+- [MedlinePlus — Ibuprofen](https://medlineplus.gov/druginfo/meds/a682159.html) —
+  generic ↔ Advil/Motrin; NSAID; general use for pain, fever, and inflammation.
+- [MedlinePlus — Naproxen](https://medlineplus.gov/druginfo/meds/a681029.html) —
+  generic ↔ Aleve (OTC); NSAID; general use for pain, fever, and inflammation.
+- [MedlinePlus — Aspirin](https://medlineplus.gov/druginfo/meds/a682878.html) —
+  generic ↔ Bayer/Bufferin; salicylate with antiplatelet effects; pain/fever; Reye's-syndrome
+  caution in children and teenagers, especially with viral illness.

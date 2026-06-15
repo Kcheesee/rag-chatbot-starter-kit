@@ -22,12 +22,16 @@ and hives. They are split into "first-generation" (more likely to cause drowsine
 - **Generally used for:** allergy symptoms and itching; because it commonly causes
   drowsiness, the same ingredient appears in many "nighttime" / sleep products.
 
+*Source: [MedlinePlus — Diphenhydramine](https://medlineplus.gov/druginfo/meds/a682539.html)*
+
 ### Cetirizine
 
 - **Generic name:** cetirizine.
 - **Common brand name:** Zyrtec.
 - **Drug class:** second-generation (generally non-drowsy) antihistamine.
 - **Generally used for:** ongoing allergy symptoms such as hay fever and hives.
+
+*Source: [MedlinePlus — Cetirizine](https://medlineplus.gov/druginfo/meds/a623043.html)*
 
 ### Loratadine
 
@@ -36,12 +40,16 @@ and hives. They are split into "first-generation" (more likely to cause drowsine
 - **Drug class:** second-generation (non-drowsy) antihistamine.
 - **Generally used for:** allergy symptoms; often chosen when a non-sedating option is wanted.
 
+*Source: [MedlinePlus — Loratadine](https://medlineplus.gov/druginfo/meds/a697038.html)*
+
 ### Fexofenadine
 
 - **Generic name:** fexofenadine.
 - **Common brand name:** Allegra.
 - **Drug class:** second-generation (non-drowsy) antihistamine.
 - **Generally used for:** seasonal and year-round allergy symptoms.
+
+*Source: [MedlinePlus — Fexofenadine](https://medlineplus.gov/druginfo/meds/a697035.html)*
 
 ## Decongestants
 
@@ -56,13 +64,22 @@ passages.
 - **Generally used for:** nasal and sinus congestion. In the United States it is kept behind
   the pharmacy counter and its sale is tracked, even though no prescription is required.
 
+*Source: [MedlinePlus — Pseudoephedrine](https://medlineplus.gov/druginfo/meds/a682619.html)*
+
 ### Phenylephrine
 
 - **Generic name:** phenylephrine.
 - **Common brand names:** appears in many "Sudafed PE" and "-D"/daytime cold products.
-- **Drug class:** oral decongestant.
+- **Drug class:** oral decongestant (also available as a nasal spray and other topical forms).
 - **Generally used for:** nasal congestion; commonly found in combination cold products on
   the open shelf.
+- **General notes:** in November 2024 the FDA proposed removing **oral** phenylephrine from
+  the OTC monograph after concluding it is **not effective** as an oral nasal decongestant at
+  labeled doses — an *effectiveness* finding, not a safety one. The finding applies only to
+  oral phenylephrine; it does not apply to nasal-spray (topical) phenylephrine. Defer to the
+  current label and a pharmacist.
+
+*Source: [MedlinePlus — Phenylephrine](https://medlineplus.gov/druginfo/meds/a606008.html); [NIH StatPearls — Phenylephrine](https://www.ncbi.nlm.nih.gov/books/NBK534801/) (FDA oral-effectiveness finding)*
 
 ### Oxymetazoline
 
@@ -71,6 +88,8 @@ passages.
 - **Drug class:** topical (nasal-spray) decongestant.
 - **Generally used for:** short-term relief of nasal congestion. Labels warn against using
   nasal decongestant sprays for more than a few days in a row because of rebound congestion.
+
+*Source: [MedlinePlus — Oxymetazoline Nasal Spray](https://medlineplus.gov/druginfo/meds/a608026.html)*
 
 ## Cough medications
 
@@ -81,12 +100,16 @@ passages.
 - **Drug class:** cough suppressant (antitussive).
 - **Generally used for:** temporarily quieting a dry, hacking cough.
 
+*Source: [MedlinePlus — Dextromethorphan](https://medlineplus.gov/druginfo/meds/a682492.html)*
+
 ### Guaifenesin
 
 - **Generic name:** guaifenesin.
 - **Common brand name:** Mucinex.
 - **Drug class:** expectorant.
 - **Generally used for:** thinning and loosening mucus so a productive cough can clear it.
+
+*Source: [MedlinePlus — Guaifenesin](https://medlineplus.gov/druginfo/meds/a682494.html)*
 
 ## Why combination products cause double-dosing mistakes
 
@@ -104,3 +127,31 @@ that share one. (See also the pain-and-fever reference for acetaminophen.)
   pediatrician, since children's products and suitability are a clinical decision. 🚫
 - "How often can I use Afrin?" → don't give a schedule; point to the label's warning about
   short-term use and suggest a pharmacist. 🚫
+
+## Sources
+
+Authoritative references used on this page (NIH/NLM consumer drug information, plus an NIH
+StatPearls monograph for the FDA oral-phenylephrine finding). Each was checked for the
+generic ↔ brand mapping, drug class, and general use described above.
+
+- [MedlinePlus — Diphenhydramine](https://medlineplus.gov/druginfo/meds/a682539.html) —
+  generic ↔ Benadryl; first-generation (sedating) antihistamine.
+- [MedlinePlus — Cetirizine](https://medlineplus.gov/druginfo/meds/a623043.html) —
+  generic ↔ Zyrtec; second-generation antihistamine; hay fever and hives.
+- [MedlinePlus — Loratadine](https://medlineplus.gov/druginfo/meds/a697038.html) —
+  generic ↔ Claritin; second-generation antihistamine.
+- [MedlinePlus — Fexofenadine](https://medlineplus.gov/druginfo/meds/a697035.html) —
+  generic ↔ Allegra; second-generation antihistamine.
+- [MedlinePlus — Pseudoephedrine](https://medlineplus.gov/druginfo/meds/a682619.html) —
+  generic ↔ Sudafed; oral nasal decongestant.
+- [MedlinePlus — Phenylephrine](https://medlineplus.gov/druginfo/meds/a606008.html) —
+  nasal decongestant; appears in many "PE"/combination cold products.
+- [NIH StatPearls — Phenylephrine](https://www.ncbi.nlm.nih.gov/books/NBK534801/) —
+  FDA finding that **oral** phenylephrine is not effective as a decongestant at labeled doses
+  (effectiveness, not safety); the finding does not apply to nasal-spray phenylephrine.
+- [MedlinePlus — Oxymetazoline Nasal Spray](https://medlineplus.gov/druginfo/meds/a608026.html) —
+  generic ↔ Afrin; topical nasal decongestant; do-not-use-beyond-3-days / rebound caution.
+- [MedlinePlus — Dextromethorphan](https://medlineplus.gov/druginfo/meds/a682492.html) —
+  generic ↔ Robitussin/Delsym (and combinations); cough suppressant (antitussive).
+- [MedlinePlus — Guaifenesin](https://medlineplus.gov/druginfo/meds/a682494.html) —
+  generic ↔ Mucinex; expectorant.

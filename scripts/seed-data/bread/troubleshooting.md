@@ -26,6 +26,8 @@ A dense, tight crumb with small or no holes is the most common complaint. It usu
 - Shape more gently to preserve the gas you built.
 - Keep the dough warmer (around 24-26 C / 75-78 F) so fermentation moves along.
 
+*Source: [King Arthur Baking — Bulk fermentation, explained](https://www.kingarthurbaking.com/blog/2019/07/22/bulk-fermentation)*
+
 ### Why Are There Big Holes Only Near the Top (Tunneling)?
 
 Large irregular tunnels just under the crust, with a tighter base, usually point to uneven shaping or trapped pockets. Degas more evenly during shaping, seal the dough well, and avoid leaving large air pockets when you form the loaf. Slightly under- or overproofing can also contribute.
@@ -39,7 +41,7 @@ If the dough barely moves during bulk or proof, the leavening or the environment
 **Likely causes:**
 
 - **Dead or expired yeast.** Yeast loses potency with age and heat.
-- **Yeast killed by hot water.** Water above roughly 50 C (120 F) can damage or kill yeast.
+- **Yeast killed by hot water.** Yeast begins to suffer once water reaches about 49 C (120 F) and is killed at around 60 C (140 F), so lukewarm water is safest.
 - **Cold environment.** A cold kitchen dramatically slows fermentation; the dough may be working, just slowly.
 - **Sluggish sourdough starter.** A starter that is young, hungry, or kept cold will not leaven strongly.
 - **Too much salt, or salt in direct contact with yeast.** Excess salt inhibits yeast.
@@ -52,9 +54,13 @@ If the dough barely moves during bulk or proof, the leavening or the environment
 - Feed your starter on a regular schedule and use it at peak activity.
 - Give it more time; many doughs rise eventually if the leavening is alive.
 
+*Source: [Bob's Red Mill — What temperature kills yeast?](https://www.bobsredmill.com/articles/what-temperature-kills-yeast)*
+
 ### My Dough Rose Then Collapsed. What Happened?
 
-A dough that rises beautifully then deflates has usually overproofed: the gluten was stretched past what it could hold and the structure gave out. Shorten the proof, build more strength during bulk with folds, and use the poke test to catch it at the right moment. See also the overproofing section below.
+A dough that rises beautifully then deflates has usually overproofed: the gluten was stretched past what it could hold and the structure gave out. Shorten the proof, build more strength during bulk with folds, and use the poke test (poke about an inch deep; if the indent stays and does not spring back, it is overproofed) to catch it at the right moment. See also the overproofing section below.
+
+*Source: [King Arthur Baking — What is proofing bread?](https://www.kingarthurbaking.com/blog/2023/08/31/proofing-bread)*
 
 ## Texture Problems
 
@@ -64,17 +70,21 @@ A gummy, sticky, or pasty interior feels undercooked even when the crust looks f
 
 **Likely causes:**
 
-- **Cut too soon.** The crumb sets as the loaf cools; slicing hot releases steam and leaves it gummy. This is extremely common.
+- **Cut too soon.** The crumb sets as the loaf cools; moisture keeps releasing during cooling, so slicing hot lets steam escape before the structure has finished and leaves it gummy. This is extremely common.
 - **Underbaked.** Pulled from the oven before the interior reached temperature.
 - **Underfermented dough.** Underproofed loaves can bake up dense and gummy.
 - **Very high hydration without enough bake time.** Wet doughs need a longer, thorough bake.
 
 **Fixes:**
 
-- Cool completely before slicing, at least an hour for lean loaves (longer for rye).
+- Cool completely before slicing, at least an hour for lean loaves (much longer for dense rye).
+
+*Source: [King Arthur Baking — How to tell if bread is done](https://www.kingarthurbaking.com/blog/2023/05/31/how-to-tell-if-bread-is-done)*
 - Bake longer and check internal temperature: around 96-100 C (205-210 F) for lean breads.
 - Make sure bulk and proof are complete before baking.
 - For wet doughs, extend the bake and consider a slightly lower final temperature to dry the interior without burning the crust.
+
+*Source: [King Arthur Baking — How to tell if bread is done](https://www.kingarthurbaking.com/blog/2023/05/31/how-to-tell-if-bread-is-done)*
 
 ## Oven Spring and Crust Problems
 
@@ -96,7 +106,10 @@ Oven spring is the dramatic rise in the first minutes of baking. Little or none 
 - Build strength with kneading or folds and shape with good tension.
 - Add steam for the first 10-20 minutes (a Dutch oven is the easiest way).
 - Preheat fully, including the stone or Dutch oven, for 30-45 minutes.
-- Score decisively, about a centimeter deep, so the loaf can open.
+- Score decisively (deep enough for the dough; chilled sourdough often wants 1/2 inch or more) so the loaf can open.
+
+*Source: [King Arthur Baking — Baking bread with steam](https://www.kingarthurbaking.com/blog/2017/02/28/baking-bread-with-steam)*  
+*Source: [King Arthur Baking — Baking trials: how much does scoring impact bread?](https://www.kingarthurbaking.com/blog/2024/05/30/scoring-bread-dough)*
 
 ### Why Is My Crust Pale?
 
@@ -113,7 +126,9 @@ A loaf that stays blond and dull usually lacks heat, sugar, or steam.
 
 - Bake hotter and longer, and bake until the crust is genuinely deep golden, not just set.
 - Remove the Dutch oven lid (or stop adding steam) partway through to dry and color the crust.
-- Make sure bulk fermentation is complete so there is sugar to brown.
+- Make sure bulk fermentation is complete so there is sugar to brown. (In an unsteamed oven the surface dries too fast for the browning reactions, leaving a pale, dull crust, so steam early, then vent.)
+
+*Source: [King Arthur Baking — Baking bread with steam](https://www.kingarthurbaking.com/blog/2017/02/28/baking-bread-with-steam)*
 
 ### Why Is the Bottom Burnt?
 
@@ -147,13 +162,17 @@ Excessive sourness comes from too much acid production, usually from long or war
 **Fixes:**
 
 - Shorten fermentation, or do the cold retard for less time.
-- Feed your starter more often and with larger flour ratios to keep it milder.
-- Use a younger, sweeter levain rather than one past peak.
-- Cooler bulk fermentation favors yeast over acid-producing bacteria, giving a milder flavor.
+- Feed your starter more often and with larger flour ratios; bigger, more frequent feedings keep acidity (and sourness) lower.
+- Use the levain near its peak rather than well past it, which encourages less sour bread.
+- Ferment cooler. Cooler temperatures slow the acid-producing bacteria and lower overall acid concentration, giving a milder flavor; warmer fermentation makes bread more sour.
+
+*Source: [King Arthur Baking — Make your sourdough more (or less) sour, part 2](https://www.kingarthurbaking.com/blog/2022/02/22/how-to-make-your-sourdough-bread-more-or-less-sour-part-2)*
 
 ### Why Is My Bread Bland or Flavorless?
 
-Flat flavor usually means fermentation was too short or too fast. Lengthen fermentation (a cold overnight proof adds a lot of flavor), reduce the amount of yeast so the rise is slower, and make sure you are using enough salt (around 2% of flour weight). A preferment or a portion of whole grain flour also deepens flavor.
+Flat flavor usually means fermentation was too short or too fast. Lengthen fermentation (a cold overnight proof adds a lot of flavor), reduce the amount of yeast so the rise is slower, and make sure you are using enough salt (around 1.8-2% of flour weight). A preferment or a portion of whole grain flour also deepens flavor.
+
+*Source: [King Arthur Baking — Why is salt important in yeast bread?](https://www.kingarthurbaking.com/blog/2020/07/29/why-is-salt-important-in-yeast-bread)*
 
 ## Proofing Diagnosis
 
@@ -176,3 +195,18 @@ These two opposite problems can look similar to a beginner, so it helps to compa
 - **Fix:** in mild cases, gently reshape to rebuild a little tension and bake right away; otherwise shorten the proof next time and use the poke test to catch the window.
 
 **Well-proofed dough** sits between the two: the poke test springs back slowly and leaves a slight indent, and the dough feels airy but still holds its shape.
+
+*Source: [King Arthur Baking — What is proofing bread?](https://www.kingarthurbaking.com/blog/2023/08/31/proofing-bread)*
+
+## Sources
+
+These references were fetched directly and confirmed to support the causes and fixes above.
+
+- [King Arthur Baking — Bulk fermentation, explained](https://www.kingarthurbaking.com/blog/2019/07/22/bulk-fermentation) — underfermented/underproofed dough bakes dense; judge bulk by the dough and keep it warm.
+- [Bob's Red Mill — What temperature kills yeast?](https://www.bobsredmill.com/articles/what-temperature-kills-yeast) — yeast begins to die near 120°F and is killed at 140°F; use lukewarm water.
+- [King Arthur Baking — What is proofing bread?](https://www.kingarthurbaking.com/blog/2023/08/31/proofing-bread) — the poke test for under-, well-, and overproofed dough; overproofed dough collapses with no spring left.
+- [King Arthur Baking — How to tell if bread is done](https://www.kingarthurbaking.com/blog/2023/05/31/how-to-tell-if-bread-is-done) — a gummy interior comes from underbaking or cutting before the loaf has cooled and set.
+- [King Arthur Baking — Baking bread with steam](https://www.kingarthurbaking.com/blog/2017/02/28/baking-bread-with-steam) — too little steam sets the crust early (limiting oven spring) and leaves it pale; steam early, then vent to brown.
+- [King Arthur Baking — Baking trials: how much does scoring impact bread?](https://www.kingarthurbaking.com/blog/2024/05/30/scoring-bread-dough) — unscored loaves are restricted with tighter crumb; scoring gives controlled expansion.
+- [King Arthur Baking — Make your sourdough more (or less) sour, part 2](https://www.kingarthurbaking.com/blog/2022/02/22/how-to-make-your-sourdough-bread-more-or-less-sour-part-2) — cooler fermentation and bigger/more frequent feedings reduce sourness; warmer increases it.
+- [King Arthur Baking — Why is salt important in yeast bread?](https://www.kingarthurbaking.com/blog/2020/07/29/why-is-salt-important-in-yeast-bread) — adequate salt (~1.8-2%) for flavor and controlled fermentation.
